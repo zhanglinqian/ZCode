@@ -1,0 +1,56 @@
+# 会话运行时与 CommandInbox 说明
+
+> 范围：AgentRuntime、turn 机、会话历史注水、会话存储与恢复、CommandInbox 串行 admission。代码基准：main@a4b44451（v4.0.0）；核对日期：2026-11-25。所有路径相对 `apps/zcode-cli/packages/`。
+
+## 运行时核心（core/runtime）
+
+- `core/src/runtime/agent-runtime.ts` — `AgentRuntime`（class，:169 起）：运行时主对象。
+- `core/src/runtime/command-queue.ts` — 命令队列。
+- `core/src/runtime/execution-state.ts` — 执行状态。
+- `core/src/runtime/model-selection.ts` — 运行时模型选择。
+- `core/src/runtime/methods/` — 运行时方法集。
+
+## turn 机与历史
+
+- `core/src/agent/turn-machine.ts` — 单轮对话状态机。
+- `core/src/agent/session-history-hydrator.ts`、`message-history.ts` — 会话历史注水与消息历史。
+- `core/src/session-context/` — 会话上下文构建。
+- compact（上下文压缩）：`core/src/compact/`；memory：`core/src/memory/`；context builder：`core/src/context/builder.ts`。
+
+## 会话装配与存储（bootstrap）
+
+- `bootstrap/src/sessions.ts` — 会话列表与恢复（SQLite session store）。
+- `bootstrap/src/zcode-protocol-v4/` — v4 协议侧的会话投影与恢复：sessions-index-projection、cold-session-resume（冷会话恢复）、transcript-hydration（转写注水）等。
+
+## CommandInbox（串行 admission，权威顺序）
+
+**位置**：`bootstrap/src/zcode-protocol-v4/command-inbox.ts`（`export class CommandInbox`）。文件注释明确其为「CLI 串行 admission 分配的权威顺序」。
+
+机制：
+
+- per-session FIFO：`AsyncGateRegistry`——session gate 持有到 `settle` 才释放，同 session 命令按实际执行顺序串行 admission。
+- key gate：按 key 的互斥。
+- 幂等：in-flight pinned / live input / settled LRU（512 条，`PROTOCOL_V4_LIMITS.idempotencyTablePerSession`）三层去重。
+- 请求身份（v4.0.0 新增）：`requestIdentity(envelope)`（`bootstrap/src/zcode-protocol-v4/command-inbox.ts`）对 `app-control-` 前缀命令做 `[clientId, type, payload]` 的 sha256 摘要；摘要里剔除 Host 派发 `createSession` 时补入的 `additionalDirectories` / `dynamicWorkflowEnabled` / `dynamicWorkflowMode` / `offPeakToolEnabled`、会话来源的展示标题，以及 `modelExecution` 里的临时 `requestAuth`——这些都不是调用者请求的一部分。同一 requestId 改正文不再被当作合法重试，而是由 `requestConflict` 判为 `proto.commandConflict`。
+- 冷会话准备钩子（v4.0.0 新增）：`CommandInboxHost.prepareDecision?(envelope)` 在去重查询完成后、持有 session admission gate 时准备冷会话，不另设接受队列；`v4-gateway.ts` 在此实现冷恢复与两阶段 opening。
+
+消费方：
+
+- `bootstrap/src/zcode-protocol-v4/v4-gateway.ts`（:679 `private readonly inbox`；`prepareDecision` 钩子在 :774）。
+- 队列 busy 自动提升：`bootstrap/src/zcode-protocol-v4/queue-auto-drain.ts`。
+- queue 命令 handler：`bootstrap/src/zcode-protocol-v4/commands/handlers/queue.ts`。
+
+## 硬规则（根 AGENTS.md）
+
+- 已接受的 busy/running 输入由 CLI/runtime `CommandInbox` 串行 admission；**Renderer 只保留未提交草稿与 pending optimistic overlay**；Host owner/lease 负责路由。
+- 保留 owner/lease、跨 Host 路由和 stale run 防护，不能仅根据单一路径删除边界判断。
+- 不能用超时掩盖同步问题。
+
+## 状态所有者速查
+
+```
+用户输入 → Renderer 草稿（未提交）
+        → 提交 → CommandInbox（CLI 侧唯一 admission 权威，FIFO + 幂等）
+        → AgentRuntime（执行状态唯一所有者）
+        → tasks-index（services 侧投影/持久化，见 ../会话与任务/）
+```

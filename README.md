@@ -226,14 +226,20 @@ node dist/zcode/debug/zcode/bin/zcode.mjs --web \
 | ---------------------------------------------------- | ------------------------------------------ |
 | `packages/desktop`                                   | Electron Main、Host、Renderer 与桌面打包   |
 | `packages/web`                                       | Web 客户端                                 |
+| `packages/web-share`、`packages/share-ui`            | Share 静态落地页入口与只读 presentation 层 |
 | `packages/server`                                    | HTTP / WebSocket 服务与远程连接            |
 | `packages/zcode-server-cli`                          | 独立 Server 启动与进程管理                 |
 | `packages/ui`                                        | 共享 React 组件、hooks 与 Zustand 状态     |
 | `packages/services`                                  | 业务服务与持久化                           |
+| `packages/session-control`                           | 会话控制核心（contract/domain/app 分层）   |
 | `packages/shared`、`packages/rpc`、`packages/client` | 共享协议和类型、RPC 框架、Agent 客户端 SDK |
 | `packages/provider`、`packages/provider-node`        | Provider 公共能力与 Node 实现              |
+| `packages/plugin-api`                                | 对外发布的插件扩展类型 SDK（可发 npm）     |
+| `packages/design-runtime`                            | 浏览器设计模式运行时                       |
+| `packages/android`                                   | Android 手机远控客户端（Kotlin/Compose）   |
+| `packages/e2e-report`、`apps/dev-docs`               | E2E 报告站与开发者文档站                   |
 | `apps/zcode-cli`                                     | Agent CLI、TUI、运行时与工具               |
-| `scripts`、`config`、`third-party`                   | 构建维护脚本、内置配置与第三方声明材料     |
+| `scripts`、`config`、`third-party`、`specs`           | 构建维护脚本、内置配置、第三方声明材料、分发规格 |
 
 ## 项目声明
 

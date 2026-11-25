@@ -34,8 +34,15 @@ App 业务单测已退役，不新增或恢复 App 业务单测 test/spec 或 `c
 - `packages/services`：业务服务；`packages/rpc`：RPC 框架。
 - `packages/shared`：共享协议与类型；`packages/client`：Agent 客户端 SDK。
 - `apps/zcode-cli`：Agent CLI 与运行时。
+- `packages/session-control`：会话控制核心（contract/domain/app 分层，CLI 与 App 用例隔离）；`packages/services/src/app-control`：App 控制面。
+- `packages/plugin-api`：对外发布的插件扩展类型 SDK（`@zcode-dev/plugin-api`，非 private）；`packages/services/src/extensions`：扩展宿主。
+- `packages/web-share`：Share 静态落地页独立入口；`packages/share-ui`：Share 只读 presentation 层。二者都不依赖 `@zcode/web`/`@zcode/ui` 包，靠源码级引用与构建别名隔离依赖闭包。
+- `packages/design-runtime`：浏览器设计模式运行时；与本文件提到的 `DESIGN.md`（ZCode 自身 UI 规范）无关，勿混淆。
+- `packages/android`：Android 手机远控客户端（Kotlin/Compose，独立 Gradle 工程，**不在 pnpm workspace 内**，不参与 `pnpm typecheck`/`pnpm lint`/`pnpm knip`）。
+- `packages/e2e-report`：E2E 报告站；`apps/dev-docs`：开发者文档站。
 - `CONTEXT.md`：插件商店领域词汇；修改相关 UI 前阅读。
 - `DESIGN.md`：UI 设计规范；修改 UI 前阅读。
+- `documents/`：项目文档索引（`documents/索引.md`），模块级专题与代码覆盖矩阵；改代码前先查对应模块专题。
 
 ## 实现与验证
 
