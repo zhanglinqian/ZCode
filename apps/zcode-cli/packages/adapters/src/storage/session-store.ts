@@ -1,6 +1,7 @@
 export {
   createSqliteSessionStore,
   getDefaultSessionDbPath,
+  LEGACY_DEFAULT_SESSION_DB_PATH,
   openStartupSqliteSessionStore,
   SqliteSessionStore,
 } from "./session-store/sqlite-session-store.js";

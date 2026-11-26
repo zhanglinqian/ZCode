@@ -740,7 +740,25 @@ describe("SQLite session store", () => {
   });
 
   it("defaults the session database under the db directory", () => {
-    expect(getDefaultSessionDbPath()).toBe(join(homedir(), ".zcode", "cli", "db", "db.sqlite"));
+    // 数据根隔离（ZCODE_DATA_BASE_DIR）：桌面双实例并行时 CLI 会话库必须跟随数据根，
+    // 否则两实例共用同一个库抢锁，存储准备 30s 超时（2026-11-26 实测）。
+    // 缺省 / 显式等于 homedir 时保持历史路径，正式版行为不变。
+    const previous = process.env.ZCODE_DATA_BASE_DIR;
+    delete process.env.ZCODE_DATA_BASE_DIR;
+    try {
+      expect(getDefaultSessionDbPath()).toBe(join(homedir(), ".zcode", "cli", "db", "db.sqlite"));
+
+      process.env.ZCODE_DATA_BASE_DIR = join(tmpdir(), "zcode-fenjue-home");
+      expect(getDefaultSessionDbPath()).toBe(
+        join(tmpdir(), "zcode-fenjue-home", ".zcode", "cli", "db", "db.sqlite"),
+      );
+
+      process.env.ZCODE_DATA_BASE_DIR = homedir();
+      expect(getDefaultSessionDbPath()).toBe(join(homedir(), ".zcode", "cli", "db", "db.sqlite"));
+    } finally {
+      if (previous === undefined) delete process.env.ZCODE_DATA_BASE_DIR;
+      else process.env.ZCODE_DATA_BASE_DIR = previous;
+    }
   });
 
   it("can inject sqlite open failures for startup/recovery cases", async () => {

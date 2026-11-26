@@ -1,5 +1,9 @@
 import { isAbsolute, resolve } from "node:path";
-import { SqliteSessionStore } from "@zcode/adapters/storage";
+import {
+  SqliteSessionStore,
+  getDefaultSessionDbPath,
+  LEGACY_DEFAULT_SESSION_DB_PATH,
+} from "@zcode/adapters/storage";
 import { resolvePath, type ConfigResult } from "@zcode/adapters/config";
 import {
   SESSION_ENTRY_MODEL_SELECTION,
@@ -138,6 +142,14 @@ export async function openStartupZCodeProtocolSessionStore(
 
 export function getSessionDbPath(configResult: ConfigResult, workingDirectory?: string): string {
   const configured = configResult.config.storage.sessionDbPath;
+  // 修复（2026-11-26）：默认会话库路径写死 homedir，桌面双实例并行（ZCODE_DATA_BASE_DIR
+  // 隔离业务数据根）时两个 CLI 会共用 ~/.zcode/cli/db/db.sqlite 抢锁，触发
+  // "SQLite startup failed: startup_status_timeout"。配置值等于历史默认值时
+  // 委托给数据根感知的解析（$BASE/.zcode/cli/db/db.sqlite）；用户显式配置的
+  // 自定义路径保持原语义不动。
+  if (configured === LEGACY_DEFAULT_SESSION_DB_PATH) {
+    return getDefaultSessionDbPath();
+  }
   // 存储 Worker 不能 chdir；显式传入业务实际 cwd，保持相对路径与普通 Agent 一致。
   if (workingDirectory && !isAbsolute(configured) && !configured.startsWith("~/"))
     return resolve(workingDirectory, configured);
