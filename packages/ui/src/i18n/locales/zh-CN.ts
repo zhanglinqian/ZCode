@@ -4992,6 +4992,7 @@ const zhCN: Record<string, string> = {
   "settings.usage.entitlementResetTime": "下次重置",
   "settings.usage.entitlementTokenUsage": "5 小时 Prompt 池已用 {percent}",
   "settings.usage.quotaTitle": "剩余额度",
+  "settings.modelProvider.selfQuota.unavailable": "无法读取套餐额度。请确认填写的是套餐订阅 Key，而不是按量计费 Key。",
   "codingPlan.quotaReset.openDialog": "获得{count}次重置额度",
   "codingPlan.quotaReset.countdown.daysHours": "{days} 天 {hours} 小时",
   "codingPlan.quotaReset.countdown.daysOnly": "{days} 天",

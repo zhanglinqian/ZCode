@@ -83,7 +83,12 @@ import {
 import { ModelProviderSection } from "@/settings/ModelProviderSection.js";
 import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
 import { useEnterpriseCodingPlanProducts } from "@/settings/model-provider-section/useEnterpriseCodingPlanProducts.js";
-import { UsageStatsSection, type UsageStatsSectionTab } from "@/settings/UsageStatsSection.js";
+import { isProviderSelfQuotaBaseUrl } from "@/settings/model-provider-section/ProviderSelfQuotaSection.js";
+import {
+  UsageStatsSection,
+  type UsageStatsMinimaxProvider,
+  type UsageStatsSectionTab,
+} from "@/settings/UsageStatsSection.js";
 import {
   buildCodingPlanUsageSources,
   type CodingPlanUsageSource,
@@ -176,10 +181,13 @@ function runSettingsActionAsync<T>(options: {
 function SettingsUsageProviderTabs({
   activeTab,
   codingPlanSources,
+  minimaxTab,
   onTabChange,
 }: {
   activeTab: UsageStatsSectionTab;
   codingPlanSources: CodingPlanUsageSource[];
+  /** MiniMax 供应商自带额度 tab；null 表示当前没有可查询的 MiniMax provider，不渲染该 tab。 */
+  minimaxTab?: { id: "minimax"; label: string } | null;
   onTabChange: (tab: UsageStatsSectionTab) => void;
 }) {
   const { intl } = useZCodeIntl();
@@ -200,6 +208,7 @@ function SettingsUsageProviderTabs({
         source,
       }),
     })),
+    ...(minimaxTab ? [minimaxTab] : []),
   ];
   const visibleActiveTab =
     activeTab === "codingPlan" && codingPlanSources[0]
@@ -647,6 +656,29 @@ export function SettingsPage({
     () => [...usagePersonalCodingPlanSources, ...usageTeamCodingPlanSources],
     [usagePersonalCodingPlanSources, usageTeamCodingPlanSources],
   );
+  /**
+   * MiniMax 供应商自带额度 tab 的事实来源。
+   *
+   * 只认「端点命中 MiniMax 官方 host 且已填 API Key」的 provider：没填 Key 时查询
+   * 必然失败，tab 不出现，避免给用户一个点了只报错的空入口。多个命中时取第一个，
+   * 与额度查询服务层的取用口径一致。
+   */
+  const usageMinimaxQuotaProvider = useMemo<UsageStatsMinimaxProvider | null>(() => {
+    const provider = usageProviderSettingsView?.providers.find(
+      (candidate) =>
+        candidate.effectiveConfig.access?.type !== "zhipu-account" &&
+        Boolean(candidate.effectiveConfig.access?.apiKey?.trim()) &&
+        isProviderSelfQuotaBaseUrl(candidate.effectiveConfig.api?.baseUrl),
+    );
+    if (!provider) {
+      return null;
+    }
+    return {
+      providerId: provider.providerId,
+      providerName: provider.providerName?.trim() || "MiniMax",
+      baseUrl: provider.effectiveConfig.api?.baseUrl ?? null,
+    };
+  }, [usageProviderSettingsView]);
   const selectedUsageCodingPlanSourceId =
     usageActiveTab === "codingPlan"
       ? (usageCodingPlanSources[0]?.id ?? null)
@@ -870,7 +902,11 @@ export function SettingsPage({
   useEffect(() => {
     if (
       !shouldFallbackSettingsUsageTabToApp({
-        activeTab: usageActiveTab === "app" ? "app" : "codingPlan",
+        // MiniMax tab 与 codingPlan 的加载判定无关，原样透传，避免被误回退成 App Usage。
+        activeTab:
+          usageActiveTab === "app" || usageActiveTab === "minimax"
+            ? usageActiveTab
+            : "codingPlan",
         checkingCodingPlanTab: checkingUsageCodingPlanTab,
         loadingModelProviders: usageProviderSettingsLoading,
         showCodingPlanTab: showUsageCodingPlanTab,
@@ -1817,6 +1853,16 @@ export function SettingsPage({
                                   <SettingsUsageProviderTabs
                                     activeTab={usageActiveTab}
                                     codingPlanSources={usageCodingPlanSources}
+                                    minimaxTab={
+                                      usageMinimaxQuotaProvider
+                                        ? {
+                                            id: "minimax",
+                                            label:
+                                              usageMinimaxQuotaProvider.providerName.trim() ||
+                                              "MiniMax",
+                                          }
+                                        : null
+                                    }
                                     onTabChange={handleUsageTabSelect}
                                   />
                                 ) : null}
@@ -2212,6 +2258,7 @@ export function SettingsPage({
                               activeTab={usageActiveTab}
                               providerSourcesLoading={usageProviderSettingsLoading}
                               selectedCodingPlanSource={selectedUsageCodingPlanSource}
+                              minimaxProvider={usageMinimaxQuotaProvider}
                               workspaceIdentity={activeWorkspaceIdentity}
                               workspacePath={activeWorkspacePath ?? undefined}
                             />

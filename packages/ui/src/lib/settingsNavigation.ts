@@ -28,7 +28,13 @@ export type SettingsSectionId =
   | "automations"
   | "shortcuts";
 
-export type SettingsUsageTabTarget = "app" | "codingPlan";
+/**
+ * 使用统计的跳转意图 tab。
+ *
+ * "minimax" 是供应商自带额度 tab：跳转入口目前只会写 "codingPlan"，但 tab 回退
+ * 判定要能原样透传 "minimax"，避免它被当成 codingPlan 误回退成 App Usage。
+ */
+export type SettingsUsageTabTarget = "app" | "codingPlan" | "minimax";
 export type SettingsPluginTabTarget = "plugins" | "mcps" | "skills" | "commands";
 export type SettingsPluginNavigationOrigin = "plugin-store";
 

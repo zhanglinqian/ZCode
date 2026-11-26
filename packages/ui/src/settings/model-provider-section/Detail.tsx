@@ -27,6 +27,7 @@ import {
   type ModelProviderNavItem,
 } from "./constants.js";
 import { InlineEditableProviderCard } from "./InlineEditableProviderCard.js";
+import { ProviderSelfQuotaSection } from "./ProviderSelfQuotaSection.js";
 import {
   ModelProviderLoadingCard,
   PresetProviderPlaceholderCard,
@@ -838,29 +839,36 @@ export function ModelProviderSectionDetail({
     ? getProviderFormApiKeyManagementUrl(customProvider)
     : undefined;
   return (
-    // 仅展示预设模板声明的入口，不根据地址猜测自定义 Provider 的 Key 控制台。
-    <InlineEditableProviderCard
-      provider={customProvider}
-      onSave={onSave}
-      {...modelEditingProps}
-      onDelete={() => onDelete(customProvider)}
-      onReorderModelIds={
-        onReorderProviderModels
-          ? (modelIds) => onReorderProviderModels(customProvider.providerId, modelIds)
-          : undefined
-      }
-      onTestModel={onTestModel}
-      presetApiKeyUrl={customApiKeyUrl}
-      readOnlyEndpoints={false}
-      nameEditable
-      onOpenPresetApiKey={
-        customApiKeyUrl
-          ? () => {
-              onOpenApiKeyUrl(customApiKeyUrl);
-            }
-          : undefined
-      }
-    />
+    <>
+      {/* 供应商自带额度（当前 MiniMax）：端点命中才渲染，其它 provider 不受影响。 */}
+      <ProviderSelfQuotaSection
+        providerId={customProvider.providerId}
+        baseUrl={customProvider.config.api?.baseUrl}
+      />
+      {/* 仅展示预设模板声明的入口，不根据地址猜测自定义 Provider 的 Key 控制台。 */}
+      <InlineEditableProviderCard
+        provider={customProvider}
+        onSave={onSave}
+        {...modelEditingProps}
+        onDelete={() => onDelete(customProvider)}
+        onReorderModelIds={
+          onReorderProviderModels
+            ? (modelIds) => onReorderProviderModels(customProvider.providerId, modelIds)
+            : undefined
+        }
+        onTestModel={onTestModel}
+        presetApiKeyUrl={customApiKeyUrl}
+        readOnlyEndpoints={false}
+        nameEditable
+        onOpenPresetApiKey={
+          customApiKeyUrl
+            ? () => {
+                onOpenApiKeyUrl(customApiKeyUrl);
+              }
+            : undefined
+        }
+      />
+    </>
   );
 }
 

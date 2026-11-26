@@ -4997,6 +4997,7 @@ const jaJP: Record<string, string> = {
   "settings.usage.entitlementResetTime": "次回リセット",
   "settings.usage.entitlementTokenUsage": "5 時間のプロンプトプール使用率 {percent}",
   "settings.usage.quotaTitle": "残りのクォータ",
+  "settings.modelProvider.selfQuota.unavailable": "プランのクォータを取得できません。従量課金キーではなく、プランのサブスクリプションキーを入力してください。",
   "codingPlan.quotaReset.openDialog": "リセット可能なクォータを {count} 回分取得",
   "codingPlan.quotaReset.countdown.daysHours": "{days}日 {hours}時間",
   "codingPlan.quotaReset.countdown.daysOnly": "{days}日",

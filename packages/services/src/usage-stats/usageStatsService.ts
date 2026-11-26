@@ -27,6 +27,26 @@ import {
   type UsageApiAuthorization,
 } from "./providers/bigmodelUsageQuotaProvider.js";
 import type { OfficialMcpCredentialSource } from "./providers/zcodeMcpQuotaProvider.js";
+import {
+  fetchMinimaxTokenPlanQuota,
+  isMinimaxQuotaBaseUrl,
+} from "./providers/minimaxQuotaProvider.js";
+
+/**
+ * 供应商自带额度查询的 provider 事实。
+ *
+ * 与 GLM 的账号型额度不同：MiniMax 的额度只由 MiniMax 自己掌握，走官方
+ * `token_plan/remains` 接口直连读取，不经过 ZCode 服务端。因此这里只需要
+ * 该 provider 已配置的 API Key 与端点，不需要账号材料。
+ */
+export interface ProviderSelfQuotaFacts {
+  /** provider 配置里的 API Key（订阅 Key）。 */
+  readonly apiKey: string;
+  /** provider 配置里的 baseUrl，用于判定是否 MiniMax 官方端点。 */
+  readonly baseUrl: string;
+  /** 展示用供应商标识。 */
+  readonly providerName: string;
+}
 
 interface UsageStatsServiceDependencies {
   apiClient: ApiClient;
@@ -38,6 +58,13 @@ interface UsageStatsServiceDependencies {
   resolveApiAuthorization?: (
     request: UsageApiAuthorizationRequest,
   ) => Promise<UsageApiAuthorization | null>;
+  /**
+   * 读取指定 provider 的配置事实（API Key 与端点），供供应商自带额度查询使用。
+   * 缺省时不提供供应商自带额度，entitlement 只走账号型链路。
+   */
+  resolveProviderSelfQuotaFacts?: (
+    providerId: string,
+  ) => Promise<ProviderSelfQuotaFacts | null>;
   env?: NodeJS.ProcessEnv;
   /** App Usage 经 ZCode Protocol 读取 agent 数据库真实统计。 */
   zcodeAgentService: Pick<IZCodeAgentService, "getAppUsageStats">;
@@ -69,6 +96,67 @@ export function createUsageStatsService(
   });
   const regularTpsCache = new Map<string, { expiresAt: number; value: number | undefined }>();
   const regularTpsInFlight = new Map<string, Promise<number | undefined>>();
+
+  /**
+   * 供应商自带额度（当前是 MiniMax）的 entitlement 快照。
+   *
+   * 与账号型额度是两条互斥的数据来源：GLM 的额度由 ZCode 服务端下发，
+   * MiniMax 的额度由 MiniMax 自己的 `token_plan/remains` 返回。命中供应商自带额度时
+   * 直接返回该快照，不再落回账号型链路，避免把 MiniMax 的 Key 当成账号材料去查服务端。
+   *
+   * 只认 `preferredProviderId`：不按"当前选中的 provider"猜，避免误把别的供应商的额度
+   * 挂到当前面板。
+   */
+  async function getProviderSelfQuotaSnapshot(
+    request: UsageEntitlementRequest,
+  ): Promise<UsageEntitlementSnapshot | null> {
+    const providerId = request.preferredProviderId?.trim() ?? "";
+    if (!providerId || !dependencies.resolveProviderSelfQuotaFacts) {
+      return null;
+    }
+    let facts: ProviderSelfQuotaFacts | null;
+    try {
+      facts = await dependencies.resolveProviderSelfQuotaFacts(providerId);
+    } catch {
+      return null;
+    }
+    if (!facts || !isMinimaxQuotaBaseUrl(facts.baseUrl)) {
+      return null;
+    }
+    const apiKey = facts.apiKey.trim();
+    if (!apiKey) {
+      return null;
+    }
+    const snapshot = await fetchMinimaxTokenPlanQuota({
+      apiClient: dependencies.apiClient,
+      authorization: apiKey,
+      baseUrl: facts.baseUrl,
+      ...(dependencies.env ? { env: dependencies.env } : {}),
+    });
+    if (!snapshot) {
+      // Bug 修复（2026-11-26）：此前失败时返回 null，getEntitlementSnapshot 会落回
+      // BigModel/GLM 额度链路，把 GLM 套餐数据当成 MiniMax 的展示（用户报障
+      // 「切到 MiniMax tab 显示的还是 glm 的」）。已判定为 MiniMax 端点后绝不回落：
+      // 失败一律返回明确的 unavailable 快照，让 UI 展示失败态而不是别的供应商的数据。
+      return {
+        generatedAt: Date.now(),
+        authenticated: false,
+        unavailableReason: "unavailable",
+        provider: { id: providerId, name: facts.providerName },
+        remaining: null,
+        subscription: null,
+        quota: null,
+      };
+    }
+    return {
+      generatedAt: Date.now(),
+      authenticated: true,
+      provider: { id: providerId, name: facts.providerName },
+      remaining: null,
+      subscription: null,
+      quota: { level: snapshot.level, limits: snapshot.limits },
+    };
+  }
 
   function regularTpsCacheKey(request: CodingPlanRegularTpsRequest): string {
     return JSON.stringify([
@@ -164,6 +252,10 @@ export function createUsageStatsService(
     async getEntitlementSnapshot(
       request: UsageEntitlementRequest = {},
     ): Promise<UsageEntitlementSnapshot> {
+      const selfQuotaSnapshot = await getProviderSelfQuotaSnapshot(request);
+      if (selfQuotaSnapshot) {
+        return selfQuotaSnapshot;
+      }
       return quotaProvider.getSnapshotForRequest(request);
     },
   };

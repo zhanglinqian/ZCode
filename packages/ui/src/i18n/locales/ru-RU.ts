@@ -4983,6 +4983,7 @@ const ruRU: Record<string, string> = {
   "settings.usage.entitlementResetTime": "Следующий сброс",
   "settings.usage.entitlementTokenUsage": "Использовано из 5-часового пула запросов: {percent}",
   "settings.usage.quotaTitle": "Остаток квоты",
+  "settings.modelProvider.selfQuota.unavailable": "Не удалось получить квоту плана. Убедитесь, что указан ключ подписки, а не ключ оплаты по факту.",
   "codingPlan.quotaReset.openDialog": "Получить сбросы квоты ({count})",
   "codingPlan.quotaReset.countdown.daysHours": "{days} д {hours} ч",
   "codingPlan.quotaReset.countdown.daysOnly": "{days} д",

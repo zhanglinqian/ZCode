@@ -3076,6 +3076,28 @@ export function createLocalServices(options: {
         accountRequestAuthService,
         zcodeAgentService,
         officialMcpCredentialSource,
+        // 供应商自带额度查询（当前是 MiniMax）：读该 provider 已配置的 API Key 与端点，
+        // 由 usage-stats 层判定端点归属后直连供应商官方额度接口。
+        resolveProviderSelfQuotaFacts: async (providerId) => {
+          await providerRuntime.start();
+          const provider = providerRuntime.registryService
+            .getView()
+            .providers.find((candidate) => candidate.providerId === providerId);
+          const access = provider?.config.access;
+          if (!provider || !access || access.type === "zhipu-account") {
+            return null;
+          }
+          const apiKey = access.apiKey?.trim() ?? "";
+          const baseUrl = provider.config.api.baseUrl?.trim() ?? "";
+          if (!apiKey || !baseUrl) {
+            return null;
+          }
+          return {
+            apiKey,
+            baseUrl,
+            providerName: provider.providerName?.trim() || provider.providerId,
+          };
+        },
       }),
     )
     .register(ICodingPlanSubscriptionService, codingPlanSubscriptionService)

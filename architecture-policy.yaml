@@ -2043,6 +2043,12 @@ global:
   acceptedUpstreamSnapshot: scripts/architecture/upstream-snapshot.json
 
 exceptions:
+  - id: minimax-self-quota-provider-new-files
+    rule: unmanaged-new-file
+    paths:
+      - packages/services/src/usage-stats/providers/minimaxQuotaProvider.ts
+      - packages/ui/src/settings/model-provider-section/ProviderSelfQuotaSection.tsx
+    reason: MiniMax 套餐额度由 MiniMax 官方 token_plan/remains 直查（GLM 走的是 ZCode 服务端 zcode-plan/billing/balance），故在既有 usage-stats providers 目录新增一个同层 provider，并在既有 provider 设置详情旁新增一个额度区块组件；沿用 usage-stats 与 model-provider-section 的既有边界，复用 usageStatsService 与 PlanUsageMetricCard，不新增平行状态，接管整个 services/ui 未受管模块不在本次范围内（spec：docs/builtin-provider-maintenance/minimax-account-provider-family.md）。
   - id: region-copy-suggested-prompts-edit
     rule: unmanaged-new-file
     paths: [packages/ui/src/v4/featureSuggestedPrompts.ts]

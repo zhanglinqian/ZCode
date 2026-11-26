@@ -4877,6 +4877,7 @@ const koKR: Record<string, string> = {
   "settings.usage.entitlementResetTime": "다음 초기화",
   "settings.usage.entitlementTokenUsage": "5시간 프롬프트 풀 {percent} 사용됨",
   "settings.usage.quotaTitle": "남은 할당량",
+  "settings.modelProvider.selfQuota.unavailable": "요금제 할당량을 읽을 수 없습니다. 종량제 키가 아닌 요금제 구독 키를 입력했는지 확인하세요.",
   "codingPlan.quotaReset.openDialog": "초기화 할당량 {count}개 받기",
   "codingPlan.quotaReset.countdown.daysHours": "{days}일 {hours}시간",
   "codingPlan.quotaReset.countdown.daysOnly": "{days}일",

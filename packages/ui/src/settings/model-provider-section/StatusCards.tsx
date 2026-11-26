@@ -975,7 +975,13 @@ function resolveGenericUsageLimitLabel(
   });
 }
 
-function PlanUsageMetricCard({
+/**
+ * 额度卡的视觉单元。
+ *
+ * 导出是为了让「供应商自带额度」（如 MiniMax 直查 `token_plan/remains`）复用同一套卡片
+ * 渲染，避免第二条额度来源自建一套样式与百分比口径。调用方只需提供 `UsageQuotaLimit`。
+ */
+export function PlanUsageMetricCard({
   action,
   infoDescription,
   label,
