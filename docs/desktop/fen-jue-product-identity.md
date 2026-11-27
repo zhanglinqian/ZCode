@@ -114,3 +114,9 @@ pnpm bundle:desktop -- win x64
 - 安装 `/Volumes/data/Applications/Fen Jue.app`，替换原脚本启动器。移除外部 `ZCODE_DESKTOP_APPLICATION_NAME`、`ZCODE_DATA_BASE_DIR` 等变量直接打开；运行进程未携带这两个变量，已加载自身 app.asar 与 Frameworks。
 - lsof 确认 Fen Jue Agent 使用 `~/.fen-jue-home/.zcode/cli/db/db.sqlite`，数据库 phase 为 ready；官方进程仍加载 `/Applications/ZCode.app` 和 `~/.zcode/cli/db/db.sqlite`。未动用户数据库或清空日志。
 - CUA 因独立签名身份限制未验收；图标仍沿用上游，系统身份独立不等于全界面文案已完成品牌替换。
+
+### 2026-11-27 追记：随 main 新功能重建
+
+- fenjue 全部提交合入 origin/main 后（接手人在 Windows 侧追加了 DeepSeek 余额直查、快捷键预设、官方数据导入、项目文档），macOS 端从 `6e88367c` 重建并重装 `/Volumes/data/Applications/Fen Jue.app`：签名校验通过、asar 与构建产物逐字节一致，asar 内容命中 `official-data-import` 与 `DeepseekBalance` 字符串（新功能已入包），主进程由自身 bundle 启动。
+- CLI 会话库 `phase: ready`，数据根 `~/.fen-jue-home`；官方实例（PID 662）不受影响。启动经 `env -u` 清除全部外部身份变量后 `open`，不依赖任何环境变量。
+- 已知环境限制（非回归）：本机 CommandLineTools 为 arm64-only，Swift 无法产出 x86_64 切片，`zcode-window-bounds` universal 合并失败按设计 fail-open——包内无该资源，CUA 权限浮窗降级为可用但不吸附；旧包同样没有该资源，且 Fen Jue 的 CUA 本就不可用。
