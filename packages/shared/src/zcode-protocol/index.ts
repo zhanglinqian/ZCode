@@ -4304,7 +4304,7 @@ export type ZCodeAutomationPauseProtocolResult = z.infer<typeof zcodeAutomationP
 // ---- Off-Peak（闲时任务）会话内创建协议----
 // 与 automation 兄弟并列（独立域，禁止互相复用标记/表）。workspace 由 host 端从
 // 当前 session 的已协商 workspace 注入。permissionMode 只开放产品
-// 四档词表（D29-4）；缺省解析在 host 端（D49-4：yolo / allowed_models 末位 / 最高推理档）。
+// 四档词表（D29-4）；缺省解析在 host 端（D49-4：yolo / allowed_models 末位 / 默认推理档，Fen Jue 取最低开启档）。
 export const zcodeOffPeakPermissionModeSchema = z.enum([
   "build",
   "edit",

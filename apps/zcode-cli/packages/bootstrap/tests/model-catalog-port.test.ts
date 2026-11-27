@@ -140,7 +140,8 @@ describe("createModelCatalogPort", () => {
     expect(port.listModels().every((entry) => entry.current === false)).toBe(true);
   });
 
-  it("defaults the reasoning level to the last value (same rule as the GUI picker's toModelOption)", () => {
+  it("defaults the reasoning level to the lowest thinking value (same rule as the GUI picker's toModelOption)", () => {
+    // Fen Jue 行为差异 D1（docs/fen-jue/behavior-deltas.md）：上游取最后一档，这里取最低的开启档。
     const fake = fakeRegistry([ZHIPU]);
     const port = createModelCatalogPort({
       registry: fake.registry,
@@ -152,7 +153,7 @@ describe("createModelCatalogPort", () => {
       modelId: "glm-5.3",
       providerLabel: "Zhipu",
       reasoningLevels: ["low", "medium", "high"],
-      defaultReasoningLevel: "high",
+      defaultReasoningLevel: "low",
       contextWindow: 200_000,
     });
   });

@@ -1,6 +1,7 @@
 import { ModelErrorCode, ModelProtocolError } from "@zcode/contracts";
 import {
   normalizeModelSelection,
+  resolveDefaultReasoningLevel,
   type ModelSelection,
   type Provider,
   type ProviderModel,
@@ -193,7 +194,8 @@ function toModelOption(provider: Provider, model: ProviderModel): ZCodeModelOpti
     maxOutputTokens: optionSpecs.maxOutputTokens.max,
     reasoning: {
       levels: reasoning.values.map((level) => ({ value: level, label: level })),
-      defaultLevel: reasoning.values.at(-1),
+      // 与 model-catalog-port.ts 共用同一条默认档位规则（最低的开启档），不在这里各自取值。
+      defaultLevel: resolveDefaultReasoningLevel(reasoning.values),
     },
     properties: {
       inputFormat: properties.inputFormat,

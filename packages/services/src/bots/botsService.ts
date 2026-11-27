@@ -9200,7 +9200,7 @@ export function createBotsService(
               const view = await readModelSelectionView(auth.context);
               const selection =
                 view && identity ? completeNewModelSelection(view, identity) : undefined;
-              // Bot 的主动选模也须取目标最高档；旧菜单失效/读取失败不能清掉已保存选择。
+              // Bot 的主动选模也须取目标默认档位（Fen Jue 为最低开启档）；旧菜单失效/读取失败不能清掉已保存选择。
               if (!selection)
                 return [createOutbound(message.actor, msg(auth.locale, "modelMissing"))];
               const nextContext = await writeDraftOptions(auth.context, {

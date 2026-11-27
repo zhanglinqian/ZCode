@@ -3,7 +3,8 @@
 // ============================================================
 // 闲时任务与 cron automation 是兄弟实体：schema 独立镜像，禁止互相复用。
 // workspace/凭证不是模型入参；permissionMode/model/thoughtLevel 缺省在 host 端解析
-// （yolo / allowed_models 末位 / 最高推理档），模型只在用户显式要求时覆盖。
+// （yolo / allowed_models 末位 / 默认推理档；Fen Jue 的默认是最低开启档，见
+// docs/fen-jue/behavior-deltas.md D1），模型只在用户显式要求时覆盖。
 
 import { z } from "zod";
 import { toToolJsonSchema } from "./json-schema.js";
@@ -32,7 +33,7 @@ export const OffPeakCreateInputSchema = z
     thoughtLevel: nonEmptyString
       .optional()
       .describe(
-        "Reasoning effort level for the chosen model. Omit to use the default (the highest level). Set only when the user explicitly asks for a lower reasoning effort.",
+        "Reasoning effort level for the chosen model. Omit to use the model's default (its lowest thinking level). Set only when the user explicitly asks for a specific reasoning effort.",
       ),
   })
   .strict();

@@ -2665,3 +2665,13 @@ exceptions:
       - packages/desktop/src/preload/officialDataImport.ts
       - packages/desktop/src/renderer/officialDataImport.ts
     reason: 官方数据导入 UX 升级（确认框数据量预估、启动期迁移进度窗口、完成态提示重启）。进度窗口沿用 cua-permission-panel 的「独立 html + 专用 preload + main 窗口模块」四件套模式：迁移执行体仍在受管模块 desktop-official-data-import（经其公开入口 run 调用），新文件只承载窗口生命周期与 IPC 桥（通道登记在 shared/channels.ts），不新增状态 owner 或协议边界；接管整个 desktop 未受管模块不在本次范围内。
+  - id: fenjue-default-reasoning-level-migration-new-file
+    rule: unmanaged-new-file
+    paths:
+      - packages/provider-node/src/fenjue-default-reasoning-level-migration.ts
+    reason: Fen Jue 行为差异 D2（docs/fen-jue/behavior-deltas.md）——把等于旧默认（最高档）的已保存默认模型选择一次性改为最低开启档。只含迁移流程和一个与 provider_config.json 同目录的账本文件（文件锁与原子写均复用 @zcode/shared/node 既有工具）；写回只经个人配置的唯一写入口 NodePersonalProviderConfigRepository.update，不新增配置写路径或状态 owner。仅由 Services 的 ProviderRuntime.start 在 Registry 就绪后调用，CLI Worker 不跑；接管整个 provider-node 未受管模块不在本次范围内。
+  - id: fenjue-default-reasoning-level-catalog-port-unmanaged-edit
+    rule: unmanaged-new-file
+    paths:
+      - apps/zcode-cli/packages/bootstrap/src/app/model-catalog-port.ts
+    reason: Fen Jue 行为差异 D1（docs/fen-jue/behavior-deltas.md）——已准入的工具层模型目录只把默认档位从「取最后一项」改为调用 @zcode/provider 的 resolveDefaultReasoningLevel（最低开启档），与 CLI 模型列表及 Host 的 completeNewModelSelection 共用同一条规则；只改一行取值与注释，不新增状态 owner 或模块边界，本次不接管整个 zcode-cli 未受管模块。

@@ -84,10 +84,12 @@ describe("ZCode App Provider Registry runtime", () => {
           expect(persisted).not.toHaveBeenCalled();
         } else {
           await result;
+          // 未指定 thought 时由 Registry 补默认档位；Fen Jue 的默认是最低开启档
+          // （docs/fen-jue/behavior-deltas.md D1），显式传入的 "high" 原样保留。
           const expected = {
             providerId: "provider-b",
             modelId: "model-b",
-            options: { reasoningLevel: "high" },
+            options: { reasoningLevel: thought.trim() || "low" },
           };
           expect(app.runtime.getSessionModelSelection()).toEqual(expected);
           expect(persisted).toHaveBeenCalledWith(expect.objectContaining({ data: expected }));
@@ -118,7 +120,7 @@ describe("ZCode App Provider Registry runtime", () => {
     ).rejects.toThrow("createZCodeApp requires a Provider Registry");
   });
 
-  it("新 Session 优先 Configured Default；未配置时按正式初始规则选择最高档", async () => {
+  it("新 Session 优先 Configured Default；未配置时按正式初始规则选择默认档位（最低开启档）", async () => {
     const registry = new ProviderRegistry([provider()]);
     const sessionStore = await createSqliteSessionStore({ dbPath: ":memory:" });
     const common = {

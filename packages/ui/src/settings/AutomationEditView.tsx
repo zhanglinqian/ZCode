@@ -1521,7 +1521,7 @@ export function AutomationEditView({
     modelValue: effectiveModelValue,
     fallbackLabel: intl.formatMessage({ id: "chat.toolbar.model.label" }),
   });
-  // 主动选模型才初始化最高档；历史恢复和 View 刷新仍保留缺失档位。
+  // 主动选模型才初始化默认档位（Fen Jue 为最低开启档）；历史恢复和 View 刷新仍保留缺失档位。
   const handleModelValueChange = useCallback(
     (value: string) => {
       modelManuallyChangedRef.current = true;

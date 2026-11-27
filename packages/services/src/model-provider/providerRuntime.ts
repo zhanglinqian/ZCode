@@ -1,6 +1,9 @@
+import { join } from "node:path";
 import {
+  FENJUE_MIGRATIONS_FILE_NAME,
   NodeModelSelectionConfigRepository,
   createNodeModelSelectionFacade,
+  runFenjueDefaultReasoningLevelMigration,
 } from "@zcode/provider-node";
 import {
   ProviderRegistryService,
@@ -11,6 +14,7 @@ import {
   type ProviderSettingsMutationTarget,
   type ProviderSource,
 } from "@zcode/provider";
+import { getAppConfigDir } from "../paths.js";
 import {
   createProviderConfigRuntime,
   type ProviderConfigRuntime,
@@ -74,6 +78,7 @@ export class ProviderRuntime {
   readonly #modelSelectionRuntime: IModelSelectionService & { dispose(): void };
   readonly #disposeModelSelectionConfiguredDefaultSource?: () => void;
   #startPromise: ReturnType<ProviderRegistryService["start"]> | null = null;
+  #forkMigrations: Promise<void> | null = null;
   #disposed = false;
 
   constructor(dependencies: ProviderRuntimeDependencies) {
@@ -120,12 +125,43 @@ export class ProviderRuntime {
   start(): Promise<void> {
     if (this.#disposed) throw new Error("ProviderRuntime 已 dispose");
     if (this.#startPromise) return this.#startPromise;
-    const startPromise = this.#configRuntime.start().then(() => this.registryService.start());
+    // Registry 就绪后、任何模型选择视图与 Agent 启动之前，执行 Fen Jue 的一次性迁移
+    // （docs/fen-jue/behavior-deltas.md D2）。迁移自身吞掉错误，不会让启动失败。
+    const startPromise = this.#configRuntime
+      .start()
+      .then(() => this.registryService.start())
+      .then(() => this.#runForkMigrations());
     this.#startPromise = startPromise;
     void startPromise.catch(() => {
       if (this.#startPromise === startPromise) this.#startPromise = null;
     });
     return startPromise;
+  }
+
+  #runForkMigrations(): Promise<void> {
+    this.#forkMigrations ??= runFenjueDefaultReasoningLevelMigration({
+      personalRepository: this.#configRuntime.personalRepository,
+      ledgerFilePath: join(getAppConfigDir(), FENJUE_MIGRATIONS_FILE_NAME),
+      // 与模型选择视图同一份 Registry：不按可见性过滤，账号未连接时也能取到档位表。
+      readReasoningLevels: (selection) =>
+        this.registryService
+          .getView()
+          .providers.find((provider) => provider.providerId === selection.providerId)
+          ?.models.find((model) => model.modelId === selection.modelId)?.config.optionSpecs
+          .reasoningLevel.values,
+    }).then(
+      (result) => {
+        if (result === "skipped") {
+          log.debug(undefined, "Fen Jue 默认思考档位迁移已有记录", { result });
+          return;
+        }
+        log.info(undefined, "Fen Jue 默认思考档位迁移完成", { result });
+      },
+      (error: unknown) => {
+        log.warn(undefined, "Fen Jue 默认思考档位迁移失败，将在下次启动重试", { error });
+      },
+    );
+    return this.#forkMigrations;
   }
 
   dispose(): void {

@@ -1205,7 +1205,7 @@ interface CreateZCodeAgentServiceBaseOptions extends Omit<
   /**
    * Off-Peak 会话内创建。config 同时承担曝光门（enabled && Selection View 非空 →
    * session create/resume 下发 offPeakToolEnabled）与缺省解析（model=白名单末位 /
-   * thoughtLevel=最高档）；service 供 offPeak/create、offPeak/list 协议 handler 调用。
+   * thoughtLevel=默认档位，Fen Jue 取最低开启档）；service 供 offPeak/create、offPeak/list 协议 handler 调用。
    * 两者任一缺省即整体关闭（纯 CLI / desktop-attached-remote 装配不传）。
    */
   resolveOffPeakClientConfig?: () => Promise<OffPeakClientConfig | undefined>;
@@ -1388,7 +1388,7 @@ export function resolveOffPeakCreateModel(
 }
 
 /**
- * 新工具任务复用公共最高档补全；旧 metadata/型号特判会偏离 values 的语义顺序。
+ * 新工具任务复用公共默认档位补全（Fen Jue 为最低开启档）；旧 metadata/型号特判会偏离 values 的语义顺序。
  * 显式档位留给 createTask 的现有校验，不在入口擅自换档。
  */
 export function resolveOffPeakToolSelection(

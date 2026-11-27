@@ -11,7 +11,8 @@ import { resolveAppRuntimeConfig } from "../src/app/runtime-config.js";
 import { createApiKeyProviderConfig } from "./provider-config-fixtures.js";
 
 const identity = { providerId: "provider-a", modelId: "model-a" };
-const complete = { ...identity, options: { reasoningLevel: "high" } };
+// Registry 推荐的完整选择取默认档位；Fen Jue 的默认是最低开启档（docs/fen-jue/behavior-deltas.md D1）。
+const complete = { ...identity, options: { reasoningLevel: "low" } };
 
 function createRegistry() {
   return new ProviderRegistry([
