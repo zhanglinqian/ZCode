@@ -12,6 +12,7 @@ import { createRemoteConversationTelemetryDispatcher } from "@zcode/shared/conve
 import { installRequestSecurityDiagnostics } from "./request-security-edition/index.js";
 import { createLocalTtftExporter } from "./localTtftExporter.js";
 import { createOfficialDataImport } from "./official-data-import/index.js";
+import { runOfficialDataImportWithProgressWindow } from "./officialDataImportProgress.js";
 /* eslint-disable max-lines */
 import "./desktopEarlyDataBaseDirBootstrap.js";
 import "./desktopEarlyChromiumHardwareAccelerationBootstrap.js";
@@ -1775,10 +1776,15 @@ async function executeDesktopCommandForApp(
 ) {
   if (
     command === DesktopCommandIds.OfficialDataImportStatus ||
+    command === DesktopCommandIds.EstimateOfficialDataImport ||
     command === DesktopCommandIds.ImportOfficialData ||
     command === DesktopCommandIds.RestoreOfficialDataBackup
   ) {
     if (ZCODE_PRODUCT_FLAVOR !== "fenjue") return null;
+    if (command === DesktopCommandIds.EstimateOfficialDataImport) {
+      // 只读预估不受 enabled 门禁约束：无备份/自定义数据根时返回 null 而不是报错。
+      return (await officialDataImport.estimate(false)) ?? null;
+    }
     const enabled =
       resolveZCodeDataRootDir() === officialImportTarget &&
       !(await mainSettingService.get()).dataBaseDir;
@@ -1787,6 +1793,21 @@ async function executeDesktopCommandForApp(
     if (!enabled) throw new Error("custom-import-target");
     const restore = command === DesktopCommandIds.RestoreOfficialDataBackup;
     const zh = toZhOrEnLocale(currentApplicationLocale) === "zh-CN";
+    // 确认前先统计待迁移数据量；预估失败只少一行说明，不阻塞确认框。
+    let estimateLine = "";
+    try {
+      const estimate = await officialDataImport.estimate(restore);
+      if (estimate && estimate.fileCount > 0) {
+        const gb = estimate.totalBytes / 1024 ** 3;
+        const size =
+          gb >= 1 ? `${gb.toFixed(2)} GB` : `${(estimate.totalBytes / 1024 ** 2).toFixed(1)} MB`;
+        estimateLine = zh
+          ? `\n\n待迁移 ${estimate.fileCount.toLocaleString()} 个文件 · ${size}。`
+          : `\n\n${estimate.fileCount.toLocaleString()} files · ${size} to migrate.`;
+      }
+    } catch (error) {
+      logger.warn("[official-data-import] estimate failed", { error: String(error) });
+    }
     const confirmation = await dialog.showMessageBox({
       type: "warning",
       buttons: zh ? ["取消", "确认并重启"] : ["Cancel", "Confirm and restart"],
@@ -1799,13 +1820,15 @@ async function executeDesktopCommandForApp(
         : zh
           ? "导入官方 ZCode 数据？"
           : "Import official ZCode data?",
-      detail: restore
-        ? zh
-          ? "当前数据会另存一份备份。"
-          : "Your current data will be archived separately."
-        : zh
-          ? "请先退出官方 ZCode 并停止其 CLI。导入后将使用官方历史和配置，Fen Jue 现有数据保留为可恢复备份。某些账号需重新登录。"
-          : "Quit official ZCode and stop its CLI first. Official history and settings will replace the active data. The previous data will be recoverable. Some accounts require sign-in again.",
+      detail:
+        (restore
+          ? zh
+            ? "当前数据会另存一份备份。"
+            : "Your current data will be archived separately."
+          : zh
+            ? "请先退出官方 ZCode 并停止其 CLI。导入后将使用官方历史和配置，Fen Jue 现有数据保留为可恢复备份。某些账号需重新登录。"
+            : "Quit official ZCode and stop its CLI first. Official history and settings will replace the active data. The previous data will be recoverable. Some accounts require sign-in again.") +
+        estimateLine,
     });
     if (confirmation.response !== 1) return;
     await officialDataImport.schedule(restore ? "restore" : "import");
@@ -2381,6 +2404,24 @@ app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
 
 app.whenReady().then(async () => {
   if (gotTheLock && ZCODE_PRODUCT_FLAVOR === "fenjue") {
+    // 有待执行迁移时先开进度窗口：用户看得到文件/字节进度与完成/失败态，
+    // 完成后由窗口里的「重启应用」再冷启一次；窗口创建失败才回退到静默迁移 + 同步弹窗。
+    if (await officialDataImport.hasPending()) {
+      const handled = await runOfficialDataImportWithProgressWindow({
+        run: officialDataImport.run,
+        skippedLinks: async () => (await officialDataImport.status()).skippedLinks,
+        locale: currentApplicationLocale,
+        rendererDir: join(import.meta.dirname, "../renderer"),
+        devServerUrl: !app.isPackaged ? process.env["ELECTRON_RENDERER_URL"] : undefined,
+        onRestart: () => {
+          app.relaunch();
+          app.quit();
+        },
+        onQuit: () => app.quit(),
+        onFailExit: () => app.exit(1),
+      });
+      if (handled) return;
+    }
     try {
       const operation = await officialDataImport.run();
       if (operation) {

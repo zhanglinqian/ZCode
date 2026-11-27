@@ -40,3 +40,28 @@ SQLite 通过一致快照或确认无写入后的完整库组复制，不能只�
 - 使用隔离的模拟官方和 Fen Jue 数据根，从桌面设置发起。迁移后可打开历史会话、任务和工作区，用户配置可加载，官方源文件哈希保持一致。
 - 覆盖已有目标备份及恢复、源正在写入、源版本不支持、空间不足、路径冲突和切换中断。
 - 验证无法携带的凭据有重新登录提示，应用继续使用自己的数据根，手机远控看不到入口。
+
+## 追记 2026-11-27：预估与进度 UX
+
+用户反馈原交互「确认并重启 → 静默迁移」过于潦草。改为四段式：
+
+```text
+用户点击迁移
+  → Main 调 estimate()（只读遍历官方源，排除规则同迁移）
+  → 原生确认框展示「待迁移 N 个文件 · X GB」
+  → 确认后仍走 schedule + quit + relaunch（迁移必须在启动早期、服务未开 SQLite 前交换目录）
+  → 重启后 whenReady 检测 pending → 先开专用进度窗口（独立 html + preload，主窗口/服务未就绪）
+  → run(onProgress) 推 copy/verify/swap/done 四阶段（文件数 + 字节数），节流落盘 progress.json
+  → 成功：窗口切完成态，「重启应用」按钮 relaunch 冷启跑在迁移后的数据上
+  → 失败（run 内部已回滚、pending 已清）：窗口切失败态 + 错误码，「退出」非零退出
+窗口创建失败回退旧路径（静默迁移 + 同步弹窗）。恢复备份走同一进度窗口。
+```
+
+进度窗口与 main 的通道：`zcode:official-data-import-progress / finished / failed`（Main → 窗口）、
+`zcode:official-data-import-restart / quit`（窗口 → Main）。preload 只暴露这五个方法。
+
+验收补充：
+
+- estimate 与迁移共用同一排除规则（roots 白名单 + excluded 正则），确认框数字与实际迁移条目一致。
+- 进度窗口在迁移全程可见；完成后必须由用户点击「重启应用」，不得无提示静默进入主界面。
+- 单测覆盖 estimate 计数/字节/排除/per-root 聚合、run 阶段顺序与失败回滚（officialDataImportEstimateProgress.test.ts）。

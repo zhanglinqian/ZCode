@@ -2658,3 +2658,10 @@ exceptions:
     paths:
       - apps/zcode-cli/packages/cli/src/browser-state-option.ts
     reason: --browser-state 与 --no-browser-state 的参数校验与来源解析（docs/browser-use/2026-11-17-cli-browser-state-spec.md §4），只被已有 unmanaged 的 CLI 入口 run.ts 调用。不新增模块边界或状态 owner；接管整个 zcode-cli 不在本次范围内。
+  - id: fenjue-official-data-import-ux-new-files
+    rule: unmanaged-new-file
+    paths:
+      - packages/desktop/src/main/officialDataImportProgress.ts
+      - packages/desktop/src/preload/officialDataImport.ts
+      - packages/desktop/src/renderer/officialDataImport.ts
+    reason: 官方数据导入 UX 升级（确认框数据量预估、启动期迁移进度窗口、完成态提示重启）。进度窗口沿用 cua-permission-panel 的「独立 html + 专用 preload + main 窗口模块」四件套模式：迁移执行体仍在受管模块 desktop-official-data-import（经其公开入口 run 调用），新文件只承载窗口生命周期与 IPC 桥（通道登记在 shared/channels.ts），不新增状态 owner 或协议边界；接管整个 desktop 未受管模块不在本次范围内。

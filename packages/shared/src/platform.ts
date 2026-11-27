@@ -760,6 +760,7 @@ export function unwrapRemoteWorkspaceBindResult(
 
 export const DesktopCommandIds = {
   OfficialDataImportStatus: "officialDataImportStatus",
+  EstimateOfficialDataImport: "estimateOfficialDataImport",
   ImportOfficialData: "importOfficialData",
   RestoreOfficialDataBackup: "restoreOfficialDataBackup",
   NewTask: "newTask",

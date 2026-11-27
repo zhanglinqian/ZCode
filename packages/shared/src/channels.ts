@@ -421,6 +421,16 @@ export const PlatformChannels = {
    * 立刻消失可能打断正在进行的拖拽。
    */
   NotifyCuaHelperPermissionDragEnded: "zcode:notify-cua-helper-permission-drag-ended",
+  /**
+   * Fen Jue 官方数据迁移的独立进度窗口（仅 fenjue 身份）：
+   * Main → 窗口推送迁移进度 / 完成态 / 失败码；窗口 → Main 请求重启或退出。
+   * 迁移发生在重启后的引导阶段，主窗口与服务尚未就绪，因此走专用窗口而不是主 preload。
+   */
+  OfficialDataImportProgress: "zcode:official-data-import-progress",
+  OfficialDataImportFinished: "zcode:official-data-import-finished",
+  OfficialDataImportFailed: "zcode:official-data-import-failed",
+  OfficialDataImportRestart: "zcode:official-data-import-restart",
+  OfficialDataImportQuit: "zcode:official-data-import-quit",
   /** Renderer → Main：上报 OAuth state 用于 deep link 路由 */
   OAuthRegisterState: "zcode:oauth-register-state",
   /** Main → Renderer：转发 deep link URL */

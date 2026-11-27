@@ -309,6 +309,7 @@ export default defineConfig([
       "preload/index": "src/preload/index.ts",
       "preload/resourceManager": "src/preload/resourceManager.ts",
       "preload/cuaPermissionPanel": "src/preload/cuaPermissionPanel.ts",
+      "preload/officialDataImport": "src/preload/officialDataImport.ts",
       "preload/pluginSandbox": "src/preload/pluginSandbox/index.ts",
     },
     outDir: "out",

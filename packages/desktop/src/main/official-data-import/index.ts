@@ -19,6 +19,10 @@ import { DatabaseSync } from "node:sqlite";
 import { validateOfficialDataImportRoots } from "./officialDataImportPaths.js";
 
 import type { OfficialDataImportOperation as Operation } from "./contract.js";
+import type {
+  OfficialDataImportEstimate as Estimate,
+  OfficialDataImportProgress as Progress,
+} from "./contract.js";
 const roots = new Set([
   "agent",
   "agents",
@@ -58,18 +62,47 @@ async function digest(path: string): Promise<string> {
   return hash.digest("hex");
 }
 
-async function inventory(root: string, parts: string[] = []): Promise<string[]> {
-  const files: string[] = [];
+async function inventory(
+  root: string,
+  parts: string[] = [],
+): Promise<{ path: string; bytes: number }[]> {
+  const files: { path: string; bytes: number }[] = [];
   for (const entry of (await readdir(join(root, ...parts), { withFileTypes: true })).sort((a, b) =>
     a.name.localeCompare(b.name),
   )) {
     if ((!parts.length && !roots.has(entry.name)) || excluded.test(entry.name)) continue;
     const child = [...parts, entry.name];
     if (entry.isDirectory()) files.push(...(await inventory(root, child)));
-    else if (entry.isFile() || entry.isSymbolicLink()) files.push(join(...child));
-    else throw new Error("unsupported-import-file");
+    else if (entry.isFile() || entry.isSymbolicLink()) {
+      const info = await lstat(join(root, ...child));
+      files.push({ path: join(...child), bytes: info.size });
+    } else throw new Error("unsupported-import-file");
   }
   return files;
+}
+
+/** 确认框前的数据量预估：只读遍历，按顶层根聚合文件数与字节（符号链接按链接自身计）。 */
+async function estimateRoot(root: string | undefined): Promise<Estimate | undefined> {
+  if (!root || !(await exists(root))) return undefined;
+  await assertDirectory(root);
+  const files = await inventory(root);
+  const byRoot = new Map<string, { files: number; bytes: number }>();
+  let totalBytes = 0;
+  for (const file of files) {
+    const key = file.path.split(sep)[0] ?? "";
+    const bucket = byRoot.get(key) ?? { files: 0, bytes: 0 };
+    bucket.files += 1;
+    bucket.bytes += file.bytes;
+    totalBytes += file.bytes;
+    byRoot.set(key, bucket);
+  }
+  return {
+    fileCount: files.length,
+    totalBytes,
+    roots: [...byRoot.entries()]
+      .map(([key, value]) => ({ key, ...value }))
+      .sort((a, b) => b.bytes - a.bytes),
+  };
 }
 
 function verifyDatabases(root: string, files: string[]): void {
@@ -124,6 +157,17 @@ export function createOfficialDataImport(source: string, target: string) {
     };
   }
 
+  /** 确认框前的只读预估：import 统计官方源，restore 统计现有备份。 */
+  async function estimate(restore: boolean): Promise<Estimate | undefined> {
+    return estimateRoot(restore ? backup : source);
+  }
+
+  /** 是否有等待执行的迁移；启动流程据此决定是否先开进度窗口。 */
+  async function hasPending(): Promise<boolean> {
+    if (await exists(state)) await assertDirectory(state);
+    return exists(pending);
+  }
+
   async function schedule(operation: Operation) {
     await validateOfficialDataImportRoots(source, target, operation === "restore");
     if ((operation === "import") === (await exists(backup))) {
@@ -137,7 +181,7 @@ export function createOfficialDataImport(source: string, target: string) {
     });
   }
 
-  async function run(): Promise<Operation | undefined> {
+  async function run(onProgress?: (progress: Progress) => void): Promise<Operation | undefined> {
     if (await exists(state)) await assertDirectory(state);
     if (!(await exists(pending))) return;
     const { operation, id } = JSON.parse(await readFile(pending, "utf8"));
@@ -148,6 +192,30 @@ export function createOfficialDataImport(source: string, target: string) {
     ) {
       throw new Error("invalid-import-journal");
     }
+    // 进度双通道：回调推给进度窗口；节流落盘 progress.json 供崩溃后诊断。
+    let lastPersistedAt = 0;
+    const emit = async (
+      phase: Progress["phase"],
+      processedFiles: number,
+      processedBytes: number,
+      totalFiles: number,
+      totalBytes: number,
+    ): Promise<void> => {
+      const progress: Progress = {
+        operation,
+        phase,
+        processedFiles,
+        processedBytes,
+        totalFiles,
+        totalBytes,
+      };
+      onProgress?.(progress);
+      const now = Date.now();
+      if (phase === "done" || now - lastPersistedAt >= 200) {
+        lastPersistedAt = now;
+        await writeFile(join(state, "progress.json"), JSON.stringify(progress)).catch(() => {});
+      }
+    };
     const displaced = operation === "import" ? backup : join(state, `before-restore-${id}`);
     const replacement = operation === "import" ? stage : backup;
     if (await exists(displaced)) {
@@ -172,24 +240,29 @@ export function createOfficialDataImport(source: string, target: string) {
         await mkdir(stage, { mode: 0o700 });
         const files = await inventory(source);
         if (!files.length) throw new Error("empty-import-source");
+        const totalBytes = files.reduce((sum, file) => sum + file.bytes, 0);
         const hashes = new Map<string, string>();
         const links = new Map<string, string>();
         let skippedLinks = 0;
+        let processedFiles = 0;
+        let processedBytes = 0;
         for (const file of files) {
-          const dest = join(stage, file);
+          const dest = join(stage, file.path);
           await mkdir(dirname(dest), { recursive: true });
-          const sourceFile = join(source, file);
+          const sourceFile = join(source, file.path);
           if ((await lstat(sourceFile)).isSymbolicLink()) {
             // 官方目录包含 skills 等兼容链接；递归跟随会重复复制或越过数据根。
             // 复制链接自身，内部引用改指最终目标根，目录联接无需 Windows 符号链接提权。
             const raw = await readlink(sourceFile);
-            links.set(file, raw);
+            links.set(file.path, raw);
             let directory: boolean;
             try {
               directory = (await stat(sourceFile)).isDirectory();
             } catch (error) {
               if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
               skippedLinks++;
+              processedFiles += 1;
+              await emit("copy", processedFiles, processedBytes, files.length, totalBytes);
               continue;
             }
             const resolved = await realpath(sourceFile);
@@ -201,16 +274,29 @@ export function createOfficialDataImport(source: string, target: string) {
               dest,
               directory ? (process.platform === "win32" ? "junction" : "dir") : "file",
             );
+            processedFiles += 1;
+            processedBytes += file.bytes;
+            await emit("copy", processedFiles, processedBytes, files.length, totalBytes);
             continue;
           }
-          await copyFile(join(source, file), dest);
-          hashes.set(file, await digest(dest));
+          await copyFile(join(source, file.path), dest);
+          hashes.set(file.path, await digest(dest));
+          processedFiles += 1;
+          processedBytes += file.bytes;
+          await emit("copy", processedFiles, processedBytes, files.length, totalBytes);
         }
-        if (JSON.stringify(files) !== JSON.stringify(await inventory(source))) {
+        if (
+          JSON.stringify(files.map((file) => file.path)) !==
+          JSON.stringify((await inventory(source)).map((file) => file.path))
+        ) {
           throw new Error("import-source-changed");
         }
+        await emit("verify", 0, 0, files.length, totalBytes);
+        let verified = 0;
         for (const [file, hash] of hashes) {
           if ((await digest(join(source, file))) !== hash) throw new Error("import-source-changed");
+          verified += 1;
+          await emit("verify", verified, processedBytes, files.length, totalBytes);
         }
         for (const [file, link] of links) {
           if ((await readlink(join(source, file))) !== link)
@@ -229,6 +315,7 @@ export function createOfficialDataImport(source: string, target: string) {
           await writeFile(settings, JSON.stringify(value, null, 2));
         }
       }
+      await emit("swap", 0, 0, 0, 0);
       await assertDirectory(replacement);
       await rename(target, displaced);
       try {
@@ -244,9 +331,10 @@ export function createOfficialDataImport(source: string, target: string) {
       }
       throw error;
     }
+    await emit("done", 0, 0, 0, 0);
     await rm(pending);
     return operation;
   }
 
-  return { status, schedule, run };
+  return { status, estimate, hasPending, schedule, run };
 }
