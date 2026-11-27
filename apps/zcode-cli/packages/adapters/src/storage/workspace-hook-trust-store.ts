@@ -12,6 +12,10 @@ import {
   workspaceHookTrustRecordSchema,
   workspaceHookTrustStoreFileSchema,
 } from "@zcode/contracts";
+import {
+  resolveZCodeDataRootDir,
+  resolveZCodeDataRootPath,
+} from "@zcode/shared/node";
 
 const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
 const DEFAULT_STALE_LOCK_MS = 30_000;
@@ -130,14 +134,22 @@ export interface WorkspaceHookTrustStorePathOptions {
 export async function resolveWorkspaceHookTrustStorePath(
   options: WorkspaceHookTrustStorePathOptions = {},
 ): Promise<string> {
-  const home = resolve(options.homeDir ?? homedir());
+  // homeDir 显式注入时优先（测试隔离到临时目录）；未注入才按数据根解析，
+  // 否则双实例时 hook 信任库共享到正式版目录。
+  const injected = options.homeDir ? resolve(options.homeDir) : null;
+  const home = injected ?? resolve(homedir());
   const userConfigPath = resolve(
-    options.userConfigPath ?? join(home, ".zcode", "cli", "config.json"),
+    options.userConfigPath ??
+      (injected ? join(injected, ".zcode", "cli", "config.json") : resolveZCodeDataRootPath("cli/config.json")),
   );
   const config = await readUserConfig(userConfigPath);
   const storage = isRecord(config.storage) ? config.storage : {};
   const configured = typeof storage.dir === "string" ? storage.dir.trim() : "";
-  const storageRoot = configured ? resolveTrustedUserPath(configured, home) : join(home, ".zcode");
+  const storageRoot = configured
+    ? resolveTrustedUserPath(configured, home)
+    : injected
+      ? join(injected, ".zcode")
+      : resolveZCodeDataRootDir();
   return join(storageRoot, SECURITY_DIRECTORY, TRUST_STORE_FILE);
 }
 

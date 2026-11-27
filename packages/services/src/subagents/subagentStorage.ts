@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
+import { resolveZCodeDataRootDir, resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 const HOME_PREFIX = "~/";
 
@@ -34,7 +35,11 @@ export async function resolveZCodeStorageRoot(options?: SubagentStorageOptions):
   const storageDir =
     typeof storage.dir === "string" && storage.dir.trim().length > 0
       ? storage.dir.trim()
-      : "~/.zcode";
+      // 用户级 subagent 存储根随数据根隔离（与 CLI 侧 storageRoot 同规则）；
+      // homeDir 显式注入时保持注入目录语义（测试隔离）。
+      : options?.homeDir?.trim()
+        ? "~/.zcode"
+        : resolveZCodeDataRootDir();
   return resolveConfigPath(storageDir, options);
 }
 
@@ -49,8 +54,11 @@ async function readUserCliConfig(
   options?: SubagentStorageOptions,
 ): Promise<Record<string, unknown>> {
   try {
+    // CLI user config 与 CLI 同一份数据根（双实例隔离）；homeDir 显式注入时优先（测试隔离）。
     const raw = await readFile(
-      join(resolveUserHomeDir(options), ".zcode", "cli", "config.json"),
+      options?.homeDir?.trim()
+        ? join(resolveUserHomeDir(options), ".zcode", "cli", "config.json")
+        : resolveZCodeDataRootPath("cli/config.json"),
       "utf8",
     );
     const parsed = JSON.parse(raw) as unknown;

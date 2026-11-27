@@ -24,6 +24,7 @@ import type { ICommandsService } from "./commands.js";
 import { CommandFileParser, type CommandFileFormat } from "./commandFileParser.js";
 import { readInstalledPluginRoots } from "#src/plugins/installedPluginRoots.js";
 import { updateJsonObjectFile } from "#src/fs/atomicFileUtils.js";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 function resolveUserHomeDir() {
   const envHome = process.env.HOME?.trim() || process.env.USERPROFILE?.trim();
@@ -81,13 +82,24 @@ function getCommandSourceDescriptor(
   return COMMAND_AGENT_SOURCE_DESCRIPTORS[agentSource];
 }
 
+/**
+ * 用户级命令根。
+ *
+ * `.zcode/commands` 属于 ZCode 数据根，随实例隔离；`.agents/commands` 是跨工具
+ * 兼容目录，必须留在真实家目录（用户从别的工具装的命令不能凭空消失）。
+ * 因此 base 按首段决定，不能整个目录一起换。
+ */
 function getUserCommandsRoot(agentSource?: CommandAgentSource): string {
   const descriptor = getCommandSourceDescriptor(agentSource);
-  return join(resolveUserHomeDir(), ...descriptor.userDirectorySegments);
+  const segments = descriptor.userDirectorySegments;
+  if (segments[0] === ".zcode") {
+    return resolveZCodeDataRootPath(segments.slice(1).join("/"));
+  }
+  return join(resolveUserHomeDir(), ...segments);
 }
 
 function getUserCliConfigPath(): string {
-  return join(resolveUserHomeDir(), ".zcode", "cli", "config.json");
+  return resolveZCodeDataRootPath("cli/config.json");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -437,7 +449,12 @@ async function resolvePluginCommandRootDescriptors(): Promise<PluginCommandRootD
 }
 
 function getUserCommandsRootForDescriptor(descriptor: CommandAgentSourceDescriptor): string {
-  return join(resolveUserHomeDir(), ...descriptor.userDirectorySegments);
+  const segments = descriptor.userDirectorySegments;
+  // 与 getUserCommandsRoot 同口径：.zcode 走数据根，.agents 留家目录。
+  if (segments[0] === ".zcode") {
+    return resolveZCodeDataRootPath(segments.slice(1).join("/"));
+  }
+  return join(resolveUserHomeDir(), ...segments);
 }
 
 function getCommandsRootForStorage(params: {

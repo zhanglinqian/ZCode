@@ -13,6 +13,7 @@ import {
 } from "./pluginSyncArchive.js";
 import { normalizePluginSyncRelativePath, resolvePluginSyncPathWithin } from "./pluginSyncPath.js";
 import { createInlinePluginDataSyncMethods } from "../data-sync/node.js";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 export interface PluginManifestInfo {
   name: string;
@@ -117,11 +118,11 @@ export function resolveUserHomeDir(): string {
 }
 
 export function getUserZcodeConfigPath(): string {
-  return join(resolveUserHomeDir(), ".zcode", "cli", "config.json");
+  return resolveZCodeDataRootPath("cli/config.json");
 }
 
 export function getUserZcodePluginRoot(): string {
-  return join(resolveUserHomeDir(), ".zcode", "plugins");
+  return resolveZCodeDataRootPath("plugins");
 }
 
 async function exportMarketplaceSourceArchiveInternal(

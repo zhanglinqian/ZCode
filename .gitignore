@@ -78,3 +78,10 @@ __pycache__/
 
 # CR-01：afterPack 生成的 NSIS helper define，按架构命名，不得入库
 packages/desktop/build/generated/
+
+# CLI 会话库迁移备份目录（migration-runner 在 db 目录旁落 backup/；跑 adapters
+# 测试时以包目录为 dataRoot 落进源码树，纯运行产物不得入库）
+apps/zcode-cli/packages/adapters/backup/
+
+# ZCode 运行时在本仓库根产生的会话计划目录（本地运行产物，非源码）
+.zcode/

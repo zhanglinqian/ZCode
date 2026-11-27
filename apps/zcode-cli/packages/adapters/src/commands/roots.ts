@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { CustomCommandRoot, CustomCommandSource } from "@zcode/contracts";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 const COMMANDS_DIR = "commands";
 const GIT_MARKER = ".git";
@@ -44,7 +45,17 @@ export async function resolveDefaultCustomCommandRoots(
   }
 
   if (includeZcode) {
-    roots.push(...commandRootsForBase(home, "user", nextPriority));
+    // 用户级命令根有两个 base，不能合并（与 skills/roots.ts 同一规则）：
+    // - `.zcode/commands` 属于 ZCode 数据根，随实例隔离，与 App 侧 commandsService 同步读写；
+    // - `.agents/commands` 是跨工具兼容目录，必须留在真实家目录。
+    // homeDirectory 显式注入时优先（调用方与测试用它隔离到临时目录），未注入才走数据根。
+    const zcodeUserCommandsRoot = options.homeDirectory
+      ? join(home, ZCODE_DIR, COMMANDS_DIR)
+      : resolveZCodeDataRootPath(COMMANDS_DIR);
+    roots.push(
+      root(zcodeUserCommandsRoot, "user", "zcode", nextPriority()),
+      root(join(home, AGENTS_DIR, COMMANDS_DIR), "user", "agents", nextPriority()),
+    );
   }
 
   const projectDirectories = await resolveProjectDirectories(resolvedWorkingDirectory);

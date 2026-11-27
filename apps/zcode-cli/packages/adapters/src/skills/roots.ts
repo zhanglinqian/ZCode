@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { SkillRoot, SkillSource } from "@zcode/contracts";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 const GIT_MARKER = ".git";
 const HOME_PREFIX = "~/";
@@ -44,7 +45,20 @@ export async function resolveDefaultSkillRoots(
   }
 
   if (includeZcode) {
-    roots.push(...skillRootsForBase(home, "user", nextPriority));
+    // 用户级技能根有两个 base，不能合并：
+    // - `.zcode/skills` 属于 ZCode 数据根，随实例隔离（桌面双实例并行时各读各的）
+    // - `.agents/skills` 是跨工具兼容目录（Claude Code 等），必须留在真实家目录，
+    //   否则用户从别的工具装的技能在隔离实例里凭空消失
+    //
+    // homeDirectory 显式注入时优先（调用方与测试用它隔离到临时目录）；
+    // 未注入才用数据根解析，否则会绕过注入扫到真实家目录下的技能。
+    const zcodeUserSkillsRoot = options.homeDirectory
+      ? join(options.homeDirectory, ZCODE_DIR, SKILLS_DIR)
+      : resolveZCodeDataRootPath("skills");
+    roots.push(
+      root(zcodeUserSkillsRoot, "user", "zcode", nextPriority()),
+      root(join(home, AGENTS_DIR, SKILLS_DIR), "user", "agents", nextPriority()),
+    );
   }
 
   const projectDirectories = await resolveProjectSkillDirectories(resolvedWorkingDirectory);

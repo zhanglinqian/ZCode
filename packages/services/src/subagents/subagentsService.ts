@@ -40,6 +40,7 @@ import { atomicWriteText } from "#src/fs/atomicFileUtils.js";
 import {
   migrateUserSubagentMarkdown,
   migrateSubagentStateFile,
+  resolveZCodeDataRootPath,
   scanOfficialPluginCacheRoots,
 } from "@zcode/shared/node";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
@@ -410,7 +411,10 @@ async function discoverPluginAgents(params: {
 
 async function readPluginConfig(options?: SubagentStorageOptions): Promise<PluginConfigSummary> {
   try {
-    const configPath = join(resolveUserHomeDir(options), ".zcode", "cli", "config.json");
+    // CLI user config 与 CLI 同一份数据根（双实例隔离）；homeDir 显式注入时优先（测试隔离）。
+    const configPath = options?.homeDir?.trim()
+      ? join(resolveUserHomeDir(options), ".zcode", "cli", "config.json")
+      : resolveZCodeDataRootPath("cli/config.json");
     const raw = await readFile(configPath, "utf-8");
     const parsed = JSON.parse(raw) as unknown;
     if (!isRecord(parsed)) return { enabledPlugins: {}, suppressedBuiltins: [] };

@@ -32,6 +32,7 @@ import type { ISettingService } from "../setting/setting.js";
 import { createServiceLogger } from "../logger/serviceLogger.js";
 import { walkSkillMarkdownPaths } from "../skills/skillDiscoveryWalk.js";
 import type { ISettingsSyncService } from "./settingsSync.js";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 const log = createServiceLogger("settings-sync");
 
@@ -417,7 +418,7 @@ function getWorkspaceZcodeSkillRoot(workspacePath: string): string {
 }
 
 function getUserZcodeSkillRoot(): string {
-  return join(resolveUserHomeDir(), ".zcode", "skills");
+  return resolveZCodeDataRootPath("skills");
 }
 
 function getWorkspaceZcodeCommandRoot(workspacePath: string): string {
@@ -425,7 +426,7 @@ function getWorkspaceZcodeCommandRoot(workspacePath: string): string {
 }
 
 function getUserZcodeCommandRoot(): string {
-  return join(resolveUserHomeDir(), ".zcode", "commands");
+  return resolveZCodeDataRootPath("commands");
 }
 
 function getWorkspaceZcodePluginRoot(workspacePath: string): string {
@@ -433,11 +434,11 @@ function getWorkspaceZcodePluginRoot(workspacePath: string): string {
 }
 
 function getUserZcodePluginRoot(): string {
-  return join(resolveUserHomeDir(), ".zcode", "plugins");
+  return resolveZCodeDataRootPath("plugins");
 }
 
 function getUserZcodeCliConfigPath(): string {
-  return join(resolveUserHomeDir(), ".zcode", "cli", "config.json");
+  return resolveZCodeDataRootPath("cli/config.json");
 }
 
 function getWorkspaceZcodeConfigPath(workspacePath: string): string {
@@ -449,6 +450,9 @@ function getClaudeUserAgentsFileSourcePath(): string {
 }
 
 function getUserZcodeAgentsFilePath(): string {
+  // AGENTS.md（用户自定义指令）必须留在真实家目录：CLI 侧读取
+  // （adapters/context）只认 HOME/USERPROFILE、忽略 ZCODE_DATA_BASE_DIR，
+  // 若 App 侧写到数据根，同步出的指令 Agent 根本读不到（路径分叉）。
   return join(resolveUserHomeDir(), ".zcode", "AGENTS.md");
 }
 

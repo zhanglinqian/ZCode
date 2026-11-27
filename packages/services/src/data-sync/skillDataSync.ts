@@ -32,6 +32,7 @@ import {
   scanDirectoryContent,
 } from "./directoryContent.js";
 import { errorMessage } from "./syncUtils.js";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 const logger = createServiceLogger("skill-data-sync");
 
@@ -52,7 +53,7 @@ interface ResolvedUserSkill {
 }
 
 function getCliConfigPath(): string {
-  return join(resolveUserHomeDir(), ".zcode", "cli", "config.json");
+  return resolveZCodeDataRootPath("cli/config.json");
 }
 
 function normalizeSkillConfigPath(path: string): string {

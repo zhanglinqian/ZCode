@@ -1,6 +1,20 @@
 import { basename, join } from "node:path";
 import { createProjectId, type ProjectId } from "@zcode/contracts";
+import { resolveZCodeDataRootDir } from "@zcode/shared/node";
 import { resolveProjectMemoryRoot } from "@zcode/core";
+
+/** contracts DefaultRuntimeConfig.storage.dir 的缺省字面量；等值时按数据根解析。 */
+export const DEFAULT_STORAGE_DIR = "~/.zcode";
+
+/**
+ * 缺省 storage root 跟随数据根（$BASE/.zcode）：桌面双实例并行时 Host 注入
+ * ZCODE_DATA_BASE_DIR，CLI 子进程继承同一 env，两侧因此解析到同一份存储根。
+ * 未设置（正式版）时解析结果与历史路径一致。显式配置的 storage.dir 仍按
+ * resolvePath 的 ~/ → 真实家目录语义展开，不受影响。
+ */
+export function resolveDefaultStorageRoot(): string {
+  return resolveZCodeDataRootDir();
+}
 
 export function getCliStorageRoot(storageRoot: string): string {
   return basename(storageRoot) === "cli" ? storageRoot : join(storageRoot, "cli");

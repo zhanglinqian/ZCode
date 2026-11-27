@@ -1,4 +1,5 @@
 import { ZCODE_PREINSTALLED_TOOLS_AVAILABLE_ENV } from "@zcode/shared/preinstalled-tools";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 import {
   createRemoteProjectService,
   IRemoteProjectService,
@@ -1211,8 +1212,9 @@ export function resolveBundledCuaHelperAppPath(
 export { isOfficialCuaPluginEnabledForWorkspace };
 
 export function hasGlobalCliZCodeCuaServer(env: NodeJS.ProcessEnv = process.env): boolean {
-  const home = env.HOME?.trim() || homedir();
-  const configPath = join(home, ".zcode", "cli", "config.json");
+  // CLI user config 由 App 与 CLI 共读写，随数据根隔离（CLI 侧 file-config.adapter
+  // 同规则解析），不能直拼 home，否则双实例时 App 看到的是正式版的 CUA 配置。
+  const configPath = resolveZCodeDataRootPath("cli/config.json", env);
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(configPath, "utf8"));

@@ -17,6 +17,7 @@ import { checkRemoteSyncDirectoriesWriteAccess } from "#src/remote-sync/remoteSy
 import { resolveUserHomeDir } from "#src/subagents/subagentStorage.js";
 import type { IDataSyncCategoryService } from "./contract.js";
 import { errorMessage } from "./syncUtils.js";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 const COMMAND_EXTENSION = /\.md$/iu;
 
@@ -229,7 +230,7 @@ export function createCommandDataSyncMethods(): IDataSyncCategoryService<Command
     async checkSyncWriteAccess() {
       return await checkRemoteSyncDirectoriesWriteAccess([
         commandsRoot("zcode"),
-        join(resolveUserHomeDir(), ".zcode", "cli"),
+        resolveZCodeDataRootPath("cli"),
       ]);
     },
 

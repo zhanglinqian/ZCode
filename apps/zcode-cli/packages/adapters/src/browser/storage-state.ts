@@ -144,6 +144,12 @@ export function resolveDefaultBrowserStatePath(
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform | string = process.platform,
 ): string {
+  // 数据根隔离优先：桌面双实例并行时 Host 注入 ZCODE_DATA_BASE_DIR，浏览器状态
+  // （会话 cookie 等）必须随实例隔离，不能落到正式版目录。
+  const configuredBase = env.ZCODE_DATA_BASE_DIR?.trim();
+  if (configuredBase) {
+    return join(configuredBase, ...DEFAULT_BROWSER_STATE_PATH_SEGMENTS);
+  }
   // 与 os.homedir() 同一规则：Windows 只认 USERPROFILE，Git Bash 等环境设置的 HOME 不能改变默认位置。
   const envHome = platform === WINDOWS_PLATFORM ? env.USERPROFILE : env.HOME;
   return join(envHome?.trim() || homedir(), ...DEFAULT_BROWSER_STATE_PATH_SEGMENTS);

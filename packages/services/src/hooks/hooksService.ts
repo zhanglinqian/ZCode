@@ -24,6 +24,7 @@ import {
   type WorkspaceHooksConfig,
 } from "@zcode/shared/workspace-hook-discovery";
 import { parseWorkspaceHookTrustStoreContent } from "@zcode/shared/workspace-hook-trust-store-file";
+import { resolveZCodeCliDir } from "@zcode/shared/node";
 import { createServiceLogger, type ServiceLogger } from "#src/logger/serviceLogger.js";
 import { getDataBaseDir } from "#src/paths.js";
 import type { IHooksService } from "./hooks.js";
@@ -72,7 +73,9 @@ function resolveUserHomeDir(): string {
 function getRootDir(source: SettingsDirectorySource, workspacePath?: string): string {
   const baseDir = workspacePath ?? resolveUserHomeDir();
   if (source === "zcode") {
-    return workspacePath ? join(baseDir, ".zcode") : join(baseDir, ".zcode", "cli");
+    // 用户级 hooks 配置在 CLI user config（~/.zcode/cli/config.json）里，
+    // 与 CLI 共读写，随数据根隔离；workspace 级仍在工作区内不变。
+    return workspacePath ? join(baseDir, ".zcode") : resolveZCodeCliDir();
   }
   return join(baseDir, source === "agents" ? ".agents" : ".claude");
 }

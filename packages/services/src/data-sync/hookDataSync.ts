@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import type {
   DataSyncImportItem,
   DataSyncImportResult,
@@ -19,6 +19,7 @@ import { checkRemoteSyncDirectoryWriteAccess } from "#src/remote-sync/remoteSync
 import { resolveUserHomeDir } from "#src/subagents/subagentStorage.js";
 import type { IDataSyncCategoryService } from "./contract.js";
 import { errorMessage, stableStringify } from "./syncUtils.js";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 type HookGroup = { matcher?: string; hooks: WorkspaceHookDefinition[] };
 /** 通过 schema 校验后的原始 hooks 对象：直接在原对象上合并，未知字段（定义上的透传字段）原样保留。 */
@@ -37,7 +38,7 @@ interface HookEntry {
 
 /** 只同步用户级 `~/.zcode/cli/config.json` 的 hooks；`~/.agents`、`~/.claude` 下的只读来源不读。 */
 function userConfigPath(): string {
-  return join(resolveUserHomeDir(), ".zcode", "cli", "config.json");
+  return resolveZCodeDataRootPath("cli/config.json");
 }
 
 function sha256(value: string): string {

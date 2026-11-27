@@ -6,6 +6,7 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { resolveZCodeDataRootDir } from "@zcode/shared/node";
 import type {
   Logger,
   PluginDiagnostic,
@@ -217,12 +218,17 @@ async function createSharedSkillCatalogEntry(
   const home = resolve(options.homeDirectory ?? homedir());
   const workingDirectory = resolve(options.workingDirectory);
   const projectBound = (await findWorktreeRoot(workingDirectory)) ?? workingDirectory;
-  const loader = createSkillCatalogLoader({ ...options, homeDirectory: home, workingDirectory });
+  // homeDirectory 透传（可缺省）：缺省时 loader 内部按数据根解析 .zcode/skills，
+  // 强行注入解析后的 home 会把隔离实例的技能根拉回真实家目录。
+  const loader = createSkillCatalogLoader({ ...options, workingDirectory });
   return createWatchedEntry({
     load: () => loader.load(),
     // 缺失目录只在这些边界之内向上找锚点：不监听用户目录这类大目录。
+    // .zcode 边界与 loader 同规则：显式注入 homeDirectory 时锚在注入目录，否则锚在数据根。
     bounds: [
-      join(home, ZCODE_DIR),
+      options.homeDirectory
+        ? join(home, ZCODE_DIR)
+        : resolveZCodeDataRootDir(),
       join(home, AGENTS_DIR),
       projectBound,
       ...(options.additionalDirectories ?? []),
@@ -241,7 +247,7 @@ async function createSharedSkillCatalogEntry(
  * 已有 skill 的 SKILL.md、没有 SKILL.md 的子目录、插件目录、内置目录都不监听，数量与 skill 数、插件数无关。
  */
 export function createSkillCatalogLoader(
-  options: SkillCatalogSourceOptions & { homeDirectory: string },
+  options: SkillCatalogSourceOptions & { homeDirectory?: string },
 ) {
   const reader = createLiveFileReader({
     label: "Skill catalog",

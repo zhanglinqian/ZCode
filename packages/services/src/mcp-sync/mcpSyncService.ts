@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, posix, win32 } from "node:path";
+import { resolveZCodeDataRootDir } from "@zcode/shared/node";
 import type {
   LoadCliMcpFromUserDirectoryRequest,
   LoadCliMcpFromUserDirectoryResult,
@@ -109,7 +110,14 @@ function buildDirectoryConfigPath(
   scope: Exclude<McpScope, "common">,
   workspacePath?: string,
 ): string {
-  const baseDir = scope === "user" ? resolveUserHomeDir() : workspacePath;
+  // zcode 用户级 MCP 配置（~/.zcode/cli/config.json）与 CLI 共读写，随数据根隔离；
+  // agents 兼容目录（~/.agents）保持真实家目录语义不变。
+  const baseDir =
+    scope === "user"
+      ? descriptor.directorySource === "zcode"
+        ? resolveZCodeDataRootDir()
+        : resolveUserHomeDir()
+      : workspacePath;
   if (!baseDir) {
     throw new Error(
       `Missing workspace path for ${descriptor.directorySource} workspace MCP config`,

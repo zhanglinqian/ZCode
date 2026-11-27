@@ -3,7 +3,7 @@ import {
   createSkillCatalogSource,
   type CatalogSkillPort,
 } from "@zcode/adapters/skills/catalog";
-import { resolvePath, type ConfigResult } from "@zcode/adapters/config";
+import { type ConfigResult } from "@zcode/adapters/config";
 import { discoverWorkspaceHookConfigPathsAsync } from "@zcode/shared/workspace-hook-discovery";
 import type { Logger, PluginLoadOutcome, SkillRoot } from "@zcode/contracts";
 import type { ZCodeAppOptions } from "./types.js";
@@ -35,7 +35,8 @@ export async function createAppSkillPort(input: {
   });
   const userPath = options.skipUserConfig ? undefined : configResult.sources.user.path;
   const sourceOptions = {
-    homeDirectory: resolvePath("~/"),
+    // 不注入 homeDirectory：缺省时 loader 内按数据根解析 .zcode/skills（双实例隔离），
+    // 硬编码解析后的真实家目录会把隔离实例的用户级技能根拉回正式版目录。
     workingDirectory,
     additionalDirectories: options.additionalDirectories,
     configPaths: [...projectPaths.map((ref) => ref.path), ...(userPath ? [userPath] : [])],

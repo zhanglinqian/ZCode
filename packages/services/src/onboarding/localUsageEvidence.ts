@@ -18,8 +18,9 @@ import { DatabaseSync } from "node:sqlite";
  *    - env ZCODE_SESSION_DB_PATH / ZCODE_SESSION_DB（双别名并存时按 env 键序取
  *      后者，与 CLI env adapter 的赋值顺序一致）；
  *    - ~/.zcode/cli/config.json 的 storage.sessionDbPath（CLI createConfig 默认
- *      位置在 home，不随 App dataBaseDir 迁移）；
- *    - 默认 ~/.zcode/cli/db/db.sqlite（homedir 展开）。
+ *      位置，双实例时随 ZCODE_DATA_BASE_DIR 迁移，host 同规则镜像）；
+ *    - 默认 ~/.zcode/cli/db/db.sqlite（数据根隔离时为 $BASE/.zcode/cli/db/db.sqlite，
+ *      与 CLI getDefaultSessionDbPath 同规则镜像）。
  *    值为相对路径时按未知跳过本证据源（CLI 按各工作区 cwd 解析，host 无法镜像）；
  *    project 级配置覆盖同样视为未知（已知限制，spec §4）。
  *    只读查询 session 表至少一行。
@@ -31,6 +32,13 @@ import { DatabaseSync } from "node:sqlite";
  */
 
 const DEFAULT_SESSION_DB_PATH = "~/.zcode/cli/db/db.sqlite";
+
+/** 数据根隔离时（ZCODE_DATA_BASE_DIR 指向独立目录）CLI 的默认 user config 与会话库
+ * 都迁到 $BASE/.zcode/cli 下（见 adapters 的 file-config.adapter 与 session-store
+ * paths），host 镜像必须同规则，否则双实例时引导判定会读到正式版的库、误判存量用户。 */
+function resolveInstanceCliBase(env: NodeJS.ProcessEnv, home: string): string {
+  return env.ZCODE_DATA_BASE_DIR?.trim() || home;
+}
 
 /** 目录非空。仅 ENOENT 视为"无证据"；其他异常上抛，由 UI 侧保守判不弹。 */
 async function hasDirEntry(dir: string): Promise<boolean> {
@@ -89,9 +97,11 @@ export async function resolveAgentSessionDbPath(
   const fromEnv = pickEnvSessionDbPath(env);
   if (fromEnv) return resolveMirroredSessionDbPath(fromEnv, home);
 
-  // CLI createConfig 的默认 user config 位置在 home（~/.zcode/cli/config.json），
-  // 与 App dataBaseDir 无关（评审三轮 CR-01 第 1 条，zcode-protocol-entrypoint 实证）。
-  const userConfigPath = options.userConfigPath ?? join(home, ".zcode", "cli", "config.json");
+  // CLI createConfig 的默认 user config 位置与 CLI 同规则：数据根隔离时在
+  // $BASE/.zcode/cli/config.json（见 adapters file-config.adapter），否则留在 home。
+  const instanceCliBase = resolveInstanceCliBase(env, home);
+  const userConfigPath =
+    options.userConfigPath ?? join(instanceCliBase, ".zcode", "cli", "config.json");
   let raw: string;
   try {
     raw = await readConfigFile(userConfigPath);
@@ -108,7 +118,9 @@ export async function resolveAgentSessionDbPath(
     if (mirrored === null) return null;
     return mirrored;
   }
-  return resolveMirroredSessionDbPath(DEFAULT_SESSION_DB_PATH, home);
+  return instanceCliBase === home
+    ? resolveMirroredSessionDbPath(DEFAULT_SESSION_DB_PATH, home)
+    : join(instanceCliBase, ".zcode", "cli", "db", "db.sqlite");
 }
 
 /**

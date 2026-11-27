@@ -4,7 +4,6 @@
 
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { LogContext, LogEntry, Logger, LoggerFactory, LogRedactor } from "@zcode/contracts";
 import { LogLevel, LogLevelName } from "@zcode/contracts";
@@ -28,6 +27,7 @@ import {
   toSerializableEntry,
 } from "./serialize.js";
 import { maybeThrowStorageFsFault } from "../storage/fs-fault-injection.js";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 let reportedTtftDrops = 0;
 const localTtftLogs = createLocalTtftLogQueue(async (entries, dropped) => {
@@ -250,7 +250,7 @@ export function createNodeLoggerFactory(options: NodeLoggerFactoryOptions = {}):
 }
 
 export function getDefaultLogDir(): string {
-  return join(homedir(), ".zcode", "cli", "log");
+  return resolveZCodeDataRootPath("cli/log");
 }
 
 function getDefaultMinLevel(env: NodeJS.ProcessEnv | undefined): LogLevel {

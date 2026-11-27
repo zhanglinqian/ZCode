@@ -75,10 +75,12 @@ import {
   resolveEffectiveConfigResult,
 } from "./app-config-options.js";
 import {
+  DEFAULT_STORAGE_DIR,
   getCliStorageRoot,
   getModelIoDir,
   getSubagentOutputRootDir,
   projectIdFromDirectory,
+  resolveDefaultStorageRoot,
 } from "./paths.js";
 import {
   asInputHistoryStore,
@@ -251,7 +253,12 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     | undefined;
   let skillCatalogPending: ReturnType<typeof createAppSkillPort> | undefined;
   try {
-    const storageRoot = resolvePath(configResult.config.storage.dir);
+    // 缺省 storage.dir（"~/.zcode"）按数据根解析：双实例并行时与 Host 共用同一数据根，
+    // 显式配置的路径仍按 ~/ → 真实家目录展开（与 sessionDbPath 的 LEGACY 委托同一模式）。
+    const storageRoot =
+      configResult.config.storage.dir === DEFAULT_STORAGE_DIR
+        ? resolveDefaultStorageRoot()
+        : resolvePath(configResult.config.storage.dir);
     const cliStorageRoot = getCliStorageRoot(storageRoot);
     const modelIoDir = getModelIoDir(
       cliStorageRoot,

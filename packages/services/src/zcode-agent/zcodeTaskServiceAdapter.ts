@@ -9,7 +9,6 @@ import { uploadBotGroupAttachments } from "./groupAttachmentUpload.js";
 import { createHash, randomUUID } from "node:crypto";
 import { createZCodeAgentConnectionScope } from "#src/zcode-agent/zcodeAgentConnectionScope.js";
 import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   Emitter,
@@ -183,6 +182,7 @@ import {
 } from "./zcodeConfigOptions.js";
 import type { CuaProductMcpServerResolver } from "#src/cua-permission-broker/index.js";
 import { registerMemoryDiagnosticsProvider } from "#src/memoryDiagnostics.js";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 interface CreateZCodeTaskServiceAdapterOptions {
   zcodeAgentService: IZCodeAgentService;
@@ -244,7 +244,7 @@ function formatZCodeAgentLogDate(now: Date): string {
 
 function resolveZCodeAgentCurrentLogFilePath(now = new Date()): string {
   const configuredLogDir = process.env.ZCODE_LOG_DIR?.trim();
-  const logDir = configuredLogDir || join(homedir(), ".zcode", "cli", "log");
+  const logDir = configuredLogDir || resolveZCodeDataRootPath("cli/log");
   return join(logDir, `zcode-${formatZCodeAgentLogDate(now)}.jsonl`);
 }
 

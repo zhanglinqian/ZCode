@@ -2043,6 +2043,10 @@ global:
   acceptedUpstreamSnapshot: scripts/architecture/upstream-snapshot.json
 
 exceptions:
+  - id: zcode-data-root-paths-new-file
+    rule: unmanaged-new-file
+    paths: [packages/shared/src/node/dataRootPaths.ts]
+    reason: ZCode 数据根（$ZCODE_DATA_BASE_DIR ?? $HOME 下的 .zcode）的唯一解析入口，供 App 与 CLI 共用；两侧各自直拼 HOME 会导致桌面双实例并行时写入同一物理目录（CLI 会话库抢锁报 startup_status_timeout、setting.json 互串）。仅 3 个纯函数、无 IO，接管整个 shared 未受管模块不在本次范围内。
   - id: minimax-self-quota-provider-new-files
     rule: unmanaged-new-file
     paths:

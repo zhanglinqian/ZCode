@@ -180,5 +180,6 @@
   "packages/desktop/test/credential-keyring-assets.test.ts",
   "packages/desktop/test/stdioTapCredentialRedaction.test.ts",
   "scripts/preinstalled-tools/catalog.test.ts",
-  "scripts/test/audit-conversation-session-json-out.test.mjs"
+  "scripts/test/audit-conversation-session-json-out.test.mjs",
+  "packages/shared/test/dataRootPaths.test.ts"
 ]

@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import type { RuntimeConfigPatch, UiLocale } from "@zcode/contracts";
 import { z } from "zod";
-import { withFileLock } from "@zcode/shared/node";
+import { withFileLock, resolveZCodeDataRootPath } from "@zcode/shared/node";
 import {
   CANONICAL_CUA_PLUGIN_ID,
   canonicalizePluginId,
@@ -60,7 +60,15 @@ export const VISUALIZE_PLUGIN_ID = "visualize@zcode-plugins-official";
 const VISUALIZE_MIGRATION_KEY = "visualizeDefaultOffMigrated";
 
 const DEFAULT_CONFIG_FILE = "config.json";
-const DEFAULT_BASE_DIR = "~/.zcode/cli";
+
+/**
+ * 默认 user config 目录跟随数据根（$BASE/.zcode/cli，历史字面量为 ~/.zcode/cli）：
+ * 桌面双实例并行时 Host 注入 ZCODE_DATA_BASE_DIR，CLI 子进程继承同一 env，两侧因此
+ * 解析到同一份 config.json。未设置（正式版）时解析结果与历史路径完全一致，行为不变。
+ */
+function resolveDefaultBaseDir(): string {
+  return resolveZCodeDataRootPath("cli");
+}
 
 /**
  * Resolve path with ~ expansion
@@ -79,7 +87,7 @@ export function loadFileConfig(filePath?: string, options: FileConfigOptions = {
   const resolvedPath = filePath
     ? resolvePath(filePath)
     : join(
-        resolvePath(options.baseDir ?? DEFAULT_BASE_DIR),
+        options.baseDir ? resolvePath(options.baseDir) : resolveDefaultBaseDir(),
         options.configFileName ?? DEFAULT_CONFIG_FILE,
       );
 
@@ -517,7 +525,7 @@ export async function removeSuppressedBuiltinInFileConfig(
  * Get default config file path
  */
 export function getDefaultConfigPath(): string {
-  return join(resolvePath(DEFAULT_BASE_DIR), DEFAULT_CONFIG_FILE);
+  return join(resolveDefaultBaseDir(), DEFAULT_CONFIG_FILE);
 }
 
 /**

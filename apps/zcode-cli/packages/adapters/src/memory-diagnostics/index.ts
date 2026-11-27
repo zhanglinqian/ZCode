@@ -3,8 +3,7 @@ import { createReadStream } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import { Session } from "node:inspector";
 import { performance } from "node:perf_hooks";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { getHeapStatistics } from "node:v8";
 import { CLI_MEMORY_DIAGNOSTIC_DIRECTORY, ZCODE_COMMIT, ZCODE_VERSION } from "@zcode/shared";
 import {
@@ -15,6 +14,7 @@ import {
 import { writeMemoryDiagnostic } from "./storage.js";
 import type { AllocationNode, AllocationProfiler } from "./types.js";
 import type { CliMemoryDiagnostics } from "./contract.js";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 export { createMemoryDiagnosticRecorder } from "./recorder.js";
 export { writeMemoryDiagnostic } from "./storage.js";
 export type { MemoryDiagnosticOptions, MemoryDiagnosticRecorder } from "./types.js";
@@ -104,7 +104,7 @@ export function startCliMemoryDiagnostics(
     }),
     write: (record) =>
       writeMemoryDiagnostic(
-        options.directory ?? join(homedir(), ".zcode", "cli", CLI_MEMORY_DIAGNOSTIC_DIRECTORY),
+        options.directory ?? resolveZCodeDataRootPath(`cli/${CLI_MEMORY_DIAGNOSTIC_DIRECTORY}`),
         record,
       ),
   });

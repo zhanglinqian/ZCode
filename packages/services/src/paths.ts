@@ -6,14 +6,17 @@ import { basename, join, win32 } from "node:path";
 import { homedir } from "node:os";
 import { readAssignedCredentialsFile } from "@zcode/shared/credential-security";
 import {
+  resolveZCodeDataBaseDir,
+  setZCodeDataBaseDir,
+} from "@zcode/shared/node";
+import {
   DATA_BASE_DIR_FORBIDDEN_WINDOWS_INSTALL_DIR_ERROR_CODE,
   ZCODE_AGENT_RUNTIME,
 } from "@zcode/shared";
 
-let _dataBaseDir: string | null = null;
 export const ZCODE_WINDOWS_APP_INSTALL_DIR_ENV = "ZCODE_WINDOWS_APP_INSTALL_DIR";
-const envDataBaseDir = process.env.ZCODE_DATA_BASE_DIR?.trim() || null;
-const defaultDataBaseDir = process.env.HOME?.trim() || homedir();
+// 数据根解析的唯一实现已上移到 @zcode/shared/node（App 与 CLI 共用同一份，
+// 否则两侧各写各的会分叉：App 写新文件、Agent 读不到）。
 
 export interface DataBaseDirTargetValidationOptions {
   platform?: NodeJS.Platform | string;
@@ -31,16 +34,12 @@ export type DataBaseDirTargetValidationResult =
 
 /** Set the base directory for app data (replaces homedir() prefix). */
 export function setDataBaseDir(dir: string | null): void {
-  _dataBaseDir = dir?.trim() || null;
+  setZCodeDataBaseDir(dir);
 }
 
-/** Get the current base directory. Priority: setDataBaseDir() > env ZCODE_DATA_BASE_DIR > homedir(). */
+/** Get the current base directory；App 与 CLI 共用 shared/node 的唯一解析结果。 */
 export function getDataBaseDir(): string {
-  if (_dataBaseDir) return _dataBaseDir;
-  if (envDataBaseDir) return envDataBaseDir;
-  // 服务实例会启动后台刷新任务；若每次调用都动态读取 HOME，
-  // 测试或宿主切换环境变量后，旧实例可能把数据写到新实例目录。
-  return defaultDataBaseDir;
+  return resolveZCodeDataBaseDir();
 }
 
 /** {dataBaseDir}/.zcode */

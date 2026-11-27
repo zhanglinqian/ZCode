@@ -748,9 +748,9 @@ describe("SQLite session store", () => {
     try {
       expect(getDefaultSessionDbPath()).toBe(join(homedir(), ".zcode", "cli", "db", "db.sqlite"));
 
-      process.env.ZCODE_DATA_BASE_DIR = join(tmpdir(), "zcode-fenjue-home");
+      process.env.ZCODE_DATA_BASE_DIR = join(tmpdir(), "fen-jue-home");
       expect(getDefaultSessionDbPath()).toBe(
-        join(tmpdir(), "zcode-fenjue-home", ".zcode", "cli", "db", "db.sqlite"),
+        join(tmpdir(), "fen-jue-home", ".zcode", "cli", "db", "db.sqlite"),
       );
 
       process.env.ZCODE_DATA_BASE_DIR = homedir();

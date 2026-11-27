@@ -36,6 +36,15 @@ export {
 } from "./node/windowsGitBashDiscovery/contract.js";
 
 export { acquireFileLock } from "./node/atomicFileLock.js";
+export {
+  ZCODE_DATA_BASE_DIR_ENV_KEY,
+  resolveDefaultDataBaseDir,
+  resolveZCodeCliDir,
+  resolveZCodeDataBaseDir,
+  resolveZCodeDataRootDir,
+  resolveZCodeDataRootPath,
+  setZCodeDataBaseDir,
+} from "./node/dataRootPaths.js";
 export { createNodeNetworkCapture, withoutNetworkCapture } from "./node/networkCapture.js";
 export {
   GEN_UI_OUTPUT_ROOT_ENV,

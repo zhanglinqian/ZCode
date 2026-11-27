@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 import type {
   DbMessageRecord,
   DbObservation,
@@ -16,11 +16,12 @@ import type {
 } from "./types.js";
 
 export function defaultLogDir(): string {
-  return join(homedir(), ".zcode", "cli", "log");
+  // 与 CLI log 写入侧同规则跟随数据根（双实例隔离），正式版解析结果不变。
+  return resolveZCodeDataRootPath("cli/log");
 }
 
 export function defaultDbPath(): string {
-  return join(homedir(), ".zcode", "cli", "db", "db.sqlite");
+  return resolveZCodeDataRootPath("cli/db/db.sqlite");
 }
 
 export async function loadLogs(options: ObservationOptions): Promise<SourceLoadResult<LogRecord>> {

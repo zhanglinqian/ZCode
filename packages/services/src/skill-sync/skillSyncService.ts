@@ -11,6 +11,7 @@ import {
   walkSkillMarkdownPaths,
 } from "../skills/skillDiscoveryWalk.js";
 import { createSkillDataSyncMethods } from "../data-sync/node.js";
+import { resolveZCodeDataRootPath } from "@zcode/shared/node";
 
 const SKILL_FILE_NAME = "SKILL.md";
 const DEFAULT_MAX_ARCHIVE_BYTES = SKILL_DATA_SYNC_MAX_ITEM_BYTES;
@@ -34,7 +35,7 @@ export function resolveUserHomeDir(): string {
 }
 
 export function getUserZcodeSkillRoot(): string {
-  return join(resolveUserHomeDir(), ".zcode", "skills");
+  return resolveZCodeDataRootPath("skills");
 }
 
 function getUserAgentsSkillRoot(): string {
