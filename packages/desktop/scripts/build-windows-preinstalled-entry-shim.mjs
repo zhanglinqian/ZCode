@@ -127,6 +127,16 @@ async function runCmake(command, args, deadline) {
     throw new Error(outcome.error || `Windows entry shim CMake failed: ${outcome.exitCode}`);
 }
 
+/**
+ * VS 生成器名。默认仍是 VS 2022（CI 基线）；装了更新版本 VS 的机器
+ * 可用 ZCODE_WINDOWS_VS_GENERATOR 覆盖（例如 "Visual Studio 18 2026"），
+ * 否则 CMake 找不到写死的生成器会直接失败。shim 仍必须由 MSVC 编译，
+ * 本开关只选生成器，不改变编译器家族。
+ */
+export function resolveVisualStudioGenerator() {
+  return process.env.ZCODE_WINDOWS_VS_GENERATOR?.trim() || "Visual Studio 17 2022";
+}
+
 async function build(outputDir, targetArch, source, deadline) {
   const command = await resolveCmake(deadline);
   const work = await mkdtemp(join(tmpdir(), "zcode-preinstalled-entry-shim-"));
@@ -141,7 +151,7 @@ async function build(outputDir, targetArch, source, deadline) {
         "-B",
         buildDir,
         "-G",
-        "Visual Studio 17 2022",
+        resolveVisualStudioGenerator(),
         "-A",
         targetArch === "arm64" ? "ARM64" : "x64",
         `-DZCODE_SHIM_OUTPUT_DIR=${builtDir.replaceAll("\\", "/")}`,

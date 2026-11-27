@@ -12,13 +12,19 @@ export function resolveRuntimeHostBuild(
   arch,
   hostPlatform = process.platform,
   compiler = process.env.ZCODE_WINDOWS_CXX,
+  generator = process.env.ZCODE_WINDOWS_VS_GENERATOR,
 ) {
   if (arch !== "x64" && arch !== "arm64")
     throw new Error(`Unsupported runtime host architecture: ${arch}`);
   return {
     configureArgs:
       hostPlatform === "win32"
-        ? ["-G", "Visual Studio 17 2022", "-A", arch === "arm64" ? "ARM64" : "x64"]
+        ? [
+            "-G",
+            generator?.trim() || "Visual Studio 17 2022",
+            "-A",
+            arch === "arm64" ? "ARM64" : "x64",
+          ]
         : [
             "-DCMAKE_SYSTEM_NAME=Windows",
             `-DCMAKE_CXX_COMPILER=${compiler || (arch === "arm64" ? "aarch64-w64-mingw32-clang++" : "x86_64-w64-mingw32-g++")}`,

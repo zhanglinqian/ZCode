@@ -17,6 +17,20 @@ test("Windows builds both supported architectures with the matching MSVC target"
   ]);
   assert.throws(() => resolveRuntimeHostBuild("ia32", "win32"), /architecture/);
 });
+test("newer Visual Studio installs can override the CMake generator", () => {
+  // 默认仍是 VS 2022（CI 基线）；只有装了更新 VS 的机器才需要覆盖生成器名。
+  assert.deepEqual(
+    resolveRuntimeHostBuild("x64", "win32", undefined, "Visual Studio 18 2026").configureArgs,
+    ["-G", "Visual Studio 18 2026", "-A", "x64"],
+  );
+  assert.deepEqual(resolveRuntimeHostBuild("x64", "win32", undefined, "  ").configureArgs, [
+    "-G",
+    "Visual Studio 17 2022",
+    "-A",
+    "x64",
+  ]);
+});
+
 test("cross builds explicitly select a Windows compiler", () => {
   assert.ok(
     resolveRuntimeHostBuild("x64", "linux").configureArgs.includes("-DCMAKE_SYSTEM_NAME=Windows"),

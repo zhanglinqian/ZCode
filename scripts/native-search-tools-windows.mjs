@@ -40,7 +40,8 @@ export function resolveNativeWindowsBuildConfig({
   return {
     arch: normalizedArch,
     cmake: env.CMAKE?.trim() || "cmake",
-    generator: "Visual Studio 17 2022",
+    // 默认 VS 2022 保持 CI 基线不变；装了更新 VS 的机器用环境变量覆盖生成器名。
+    generator: env.ZCODE_WINDOWS_VS_GENERATOR?.trim() || "Visual Studio 17 2022",
     generatorArchitecture: normalizedArch === "arm64" ? "ARM64" : "x64",
     hostArch: normalizedHostArch,
     platform: normalizedPlatform,

@@ -3,6 +3,7 @@ import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:f
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
+import { resolveVisualStudioGenerator } from "../scripts/build-windows-preinstalled-entry-shim.mjs";
 
 const exec = promisify(execFile);
 const repoRoot = resolve(import.meta.dirname, "../../..");
@@ -204,5 +205,24 @@ describe("preinstalled entry shim build lifecycle", () => {
     await expect(f.run([], { SHIM_BUILD_FAIL: "1" })).rejects.toThrow();
     expect(await readFile(join(f.output, shimName))).toEqual(previous);
     expect(await readFile(join(f.output, "build.json"))).toEqual(manifest);
+  });
+});
+
+describe("preinstalled entry shim CMake generator", () => {
+  it("defaults to VS 2022 and honors the override for newer Visual Studio", () => {
+    // 默认保持 CI 基线不变；装了 VS 18 的开发机用环境变量覆盖生成器名，
+    // 否则 CMake 会因找不到 "Visual Studio 17 2022" 生成器直接失败。
+    const previous = process.env.ZCODE_WINDOWS_VS_GENERATOR;
+    try {
+      delete process.env.ZCODE_WINDOWS_VS_GENERATOR;
+      expect(resolveVisualStudioGenerator()).toBe("Visual Studio 17 2022");
+      process.env.ZCODE_WINDOWS_VS_GENERATOR = "  Visual Studio 18 2026  ";
+      expect(resolveVisualStudioGenerator()).toBe("Visual Studio 18 2026");
+      process.env.ZCODE_WINDOWS_VS_GENERATOR = "   ";
+      expect(resolveVisualStudioGenerator()).toBe("Visual Studio 17 2022");
+    } finally {
+      if (previous === undefined) delete process.env.ZCODE_WINDOWS_VS_GENERATOR;
+      else process.env.ZCODE_WINDOWS_VS_GENERATOR = previous;
+    }
   });
 });
