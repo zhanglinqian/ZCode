@@ -9,6 +9,7 @@ import {
   ZCODE_BUILD_TIME,
   ZCODE_COMMIT,
   ZCODE_ENV,
+  ZCODE_PRODUCT_FLAVOR,
   ZCODE_VERSION,
 } from "@zcode/shared";
 import { createCustomAboutDialogHtml } from "./aboutWindow.js";
@@ -53,7 +54,7 @@ interface AboutSnapshotOptions {
   };
 }
 
-const ABOUT_APPLICATION_NAME = "ZCode Desktop App";
+const ABOUT_APPLICATION_NAME = ZCODE_PRODUCT_FLAVOR === "fenjue" ? "Fen Jue" : "ZCode Desktop App";
 // 自定义 About 内容本体是 256x280；原生窗口如果同尺寸会让内容贴满透明窗口边界。
 // 这里给 BrowserWindow 额外留出背景呼吸空间，避免正式 About 看起来比 demo 更局促。
 const ABOUT_WINDOW_WIDTH = 256;
@@ -100,7 +101,10 @@ function normalizePackageVersion(version: string | undefined): string {
 }
 
 function getAboutMessages(locale: Locale): (typeof ABOUT_MESSAGES)["en-US"] {
-  return ABOUT_MESSAGES[toZhOrEnLocale(locale)];
+  const messages = ABOUT_MESSAGES[toZhOrEnLocale(locale)];
+  return ZCODE_PRODUCT_FLAVOR === "fenjue"
+    ? { ...messages, aboutTitle: messages.aboutTitle.replace("ZCode", "Fen Jue") }
+    : messages;
 }
 
 function readJsonFile<T>(filePath: string): T | null {

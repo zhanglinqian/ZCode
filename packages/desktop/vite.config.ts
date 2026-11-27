@@ -190,7 +190,16 @@ export default defineConfig(({ command, mode }) => {
   });
   const codingPlanWebviewOrigin =
     env.VITE_CODING_PLAN_WEBVIEW_ORIGIN ?? process.env.VITE_CODING_PLAN_WEBVIEW_ORIGIN ?? "";
-  const plugins = [
+  const plugins: Plugin[] = [
+    {
+      name: "desktop-product-title",
+      transformIndexHtml(html, context) {
+        // 主窗口标题跟随编译期产品身份，不再依赖启动器设置环境变量。
+        return zcodeProductFlavor === "fenjue" && context.filename.endsWith("/index.html")
+          ? html.replace("<title>ZCode</title>", "<title>Fen Jue</title>")
+          : html;
+      },
+    },
     // 仅开发服务器装配，所有 build 都不注入；后端 ZCODE_ENV 不决定是否开启开发工具。
     ...(command === "serve" && mode !== "production" && env.ZCODE_REACT_SCAN !== "0"
       ? [createReactScanDevPlugin()]

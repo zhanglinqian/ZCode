@@ -1,5 +1,9 @@
 # ZCode Preview 内部测试包
 
+> 2026-11-27：新增独立二开身份 [Fen Jue](fen-jue-product-identity.md)。它复用本机制，
+> 但默认业务根为 `~/.fen-jue-home/.zcode`，不采用 Preview 与 production 共享数据的策略。
+> 原 production/preview 身份及默认路径保持不变。
+
 ## Feature Summary
 
 | Field                 | Value                                                                                                                                                                                                                   |
