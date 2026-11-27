@@ -66,6 +66,8 @@ ZCODE_ENV=production ZCODE_FENJUE_IDENTITY=1 ZCODE_DESKTOP_DIST_DIR=dist-fenjue 
 
 ## Windows 构建
 
+> 交接给他人执行时，流程、前置检查、验收清单与已知限制见 [Fen Jue Windows 构建交接](fen-jue-windows-build-handoff.md)。
+
 Windows 安装包（NSIS，`Fen Jue-4.0.0-win-x64.exe`）**必须在 Windows 机器上构建**，与上游 CI 的 Windows runner 构建方式一致。不能在 macOS 上产出，原因是硬性契约而非工具缺失：
 
 - 入口 shim 的 CMakeLists 明确 `if(NOT MSVC) FATAL_ERROR`（安全敏感组件，依赖 /guard:cf、/Brepro 等 MSVC 专属选项保证可复现字节）；`prepare:preinstalled-entry-shim` 脚本在非 Windows 平台直接跳过。
@@ -73,12 +75,14 @@ Windows 安装包（NSIS，`Fen Jue-4.0.0-win-x64.exe`）**必须在 Windows 机
 
 Windows 机器前置：
 
-| 依赖                                                      | 用途                                             |
-| --------------------------------------------------------- | ------------------------------------------------ |
-| Node.js 24 + corepack（pnpm）                             | JS 构建链                                        |
-| Git                                                       | 取源码                                           |
-| Visual Studio Build Tools 2022（含 C++ 生成工具与 CMake） | 编译 entry shim、runtime-host、node-gyp 原生模块 |
-| Python 3.10+                                              | node-gyp                                         |
+| 依赖                                                             | 用途                                             |
+| ---------------------------------------------------------------- | ------------------------------------------------ |
+| Node.js 24 + corepack（pnpm）                                    | JS 构建链                                        |
+| Git                                                              | 取源码                                           |
+| Visual Studio Build Tools 2022 或更新（含 C++ 生成工具与 CMake） | 编译 entry shim、runtime-host、node-gyp 原生模块 |
+| Python 3.10+                                                     | node-gyp                                         |
+
+原生构建默认生成器是 `Visual Studio 17 2022`（CI 基线）。只装了更新 VS（如 VS 18）时，构建前设置 `ZCODE_WINDOWS_VS_GENERATOR="Visual Studio 18 2026"`；该开关只选 CMake 生成器，shim 仍强制 MSVC 编译。
 
 PowerShell 步骤（源码快照 zip 由 macOS 侧提供，含全部 fenjue 改动与本文档；`git ls-files` 口径打包，无 node_modules）：
 
