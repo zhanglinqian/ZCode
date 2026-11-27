@@ -3,7 +3,10 @@ import { z } from "zod";
 
 // 额度类型拆在 usage-quota.ts，见该文件头部说明；这里 re-export 保持既有 import 路径不变。
 export * from "./usage-quota.js";
+// 供应商自带余额类型同理拆出：余额是货币金额，与配额的百分比语义不同，不能共用同一组类型。
+export * from "./usage-provider-balance.js";
 import type { UsageMcpQuotaSnapshot, UsageQuotaSnapshot } from "./usage-quota.js";
+import type { UsageProviderBalanceSnapshot } from "./usage-provider-balance.js";
 import type { ZCodeAccountAccess, ZCodeProviderAccountAccess } from "./zcode-protocol/index.js";
 
 export const ESTIMATED_TOKEN_CHAR_DIVISOR = 3;
@@ -98,6 +101,12 @@ export interface UsageEntitlementSnapshot {
    * 拉取失败、未开通 Coding Plan、或该额度不属于本次查询的连接时一律为 null（可选数据面）。
    */
   mcpQuota?: UsageMcpQuotaSnapshot | null;
+  /**
+   * 供应商自带账户余额（当前是 DeepSeek 的 `GET /user/balance`）。
+   * 与 quota 是两条互斥的数据来源：quota 是配额窗口百分比，余额是货币金额。
+   * 查询失败、未命中供应商余额端点、或该供应商没有余额接口时一律为 null（可选数据面）。
+   */
+  providerBalance?: UsageProviderBalanceSnapshot | null;
 }
 
 export interface UsageEntitlementContext {

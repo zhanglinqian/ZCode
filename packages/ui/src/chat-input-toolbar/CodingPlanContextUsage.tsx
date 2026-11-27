@@ -85,7 +85,13 @@ function formatContextFiveHourResetTime({
   }).format(resetAt);
 }
 
-function ChatCodingPlanUsageMeter({
+/**
+ * Coding Plan 额度条的视觉单元（compact meter：label + 剩余% · 重置时间 + 细进度条）。
+ *
+ * 导出给「供应商自带额度」面板（MiniMax）复用，避免第二条额度来源自建一套样式与
+ * 百分比口径；调用方只需提供 label、剩余百分比、重置时间与色板色。
+ */
+export function ChatCodingPlanUsageMeter({
   color,
   label,
   action,

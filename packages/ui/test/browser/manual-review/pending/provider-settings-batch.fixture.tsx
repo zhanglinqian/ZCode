@@ -86,7 +86,10 @@ function createProvider(templateId: string): ProviderSettingsFormProvider {
   };
 }
 function QuotaDetailFixture() {
-  const provider = createProvider(params.get("quota") === "minimax" ? "minimax" : "bigmodel-api");
+  const quotaKind = params.get("quota");
+  const provider = createProvider(
+    quotaKind === "minimax" ? "minimax" : quotaKind === "deepseek" ? "deepseek" : "bigmodel-api",
+  );
   return (
     <main className="min-h-screen bg-card p-4 text-foreground">
       <ProviderDetailFeedbackBoundary>
@@ -287,7 +290,13 @@ createRoot(document.getElementById("root")!).render(
     services={
       {
         usageStatsService: {
-          getEntitlementSnapshot: async () => (await fetch("/quota-snapshot")).json(),
+          getEntitlementSnapshot: async () => {
+            const response = await fetch("/quota-snapshot");
+            if (!response.ok) {
+              throw new Error("quota snapshot unavailable");
+            }
+            return (await response.json()) as unknown;
+          },
         },
         providerSettingsService: {
           resolveModelConfig: async (input: { modelId: string }) => {

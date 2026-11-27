@@ -51,6 +51,11 @@ import {
   hasChatStartPlanBalance,
   type ChatStartPlanBalanceConfig,
 } from "@/chat-input-toolbar/StartPlanContextBalance.js";
+import {
+  ChatProviderSelfUsagePanel,
+  hasChatProviderSelfUsage,
+  type ChatProviderSelfUsageConfig,
+} from "@/chat-input-toolbar/ProviderSelfContextUsage.js";
 import { runContextPanelActionWithClose } from "@/chat-input-toolbar/contextPanelAction.js";
 import { coordinateCodingPlanQuotaResetAutoPlay } from "@/chat-input-toolbar/codingPlanQuotaResetAutoPlay.js";
 import { formatCompactTokenNumber } from "@/lib/tokenNumberFormat.js";
@@ -261,6 +266,7 @@ export function refreshContextUsageOnOpen(
 export function ChatContextUsage({
   codingPlanUsageRemaining,
   startPlanBalance,
+  providerSelfUsage,
   taskUsage,
   selectedProvider: _selectedProvider,
   intl,
@@ -268,6 +274,8 @@ export function ChatContextUsage({
 }: {
   codingPlanUsageRemaining?: ChatCodingPlanUsageRemainingConfig;
   startPlanBalance?: ChatStartPlanBalanceConfig;
+  /** 供应商自带额度/余额（MiniMax 用量 / DeepSeek 余额）；与 Coding Plan / Start Plan 互斥。 */
+  providerSelfUsage?: ChatProviderSelfUsageConfig;
   taskUsage: {
     used: number;
     size: number;
@@ -377,12 +385,31 @@ export function ChatContextUsage({
       },
     };
   }, [startPlanBalance, contextAccessRefreshing]);
+  const providerSelfUsageWithClose = useMemo<
+    ChatProviderSelfUsageConfig | undefined
+  >(() => {
+    if (!providerSelfUsage) {
+      return undefined;
+    }
+    if (!providerSelfUsage.onUsageClick) {
+      return providerSelfUsage;
+    }
+    return {
+      ...providerSelfUsage,
+      onUsageClick: () =>
+        runContextPanelActionWithClose({
+          action: providerSelfUsage.onUsageClick,
+          close: () => setContextOpen(false),
+        }),
+    };
+  }, [providerSelfUsage]);
   const hasCodingPlanUsageRemaining = codingPlanUsageRemainingWithClose
     ? hasChatCodingPlanUsageRemaining(codingPlanUsageRemainingWithClose)
     : false;
   const hasStartPlanBalance = hasChatStartPlanBalance(
     startPlanBalanceWithClose,
   );
+  const hasProviderSelfUsage = hasChatProviderSelfUsage(providerSelfUsage);
 
   // 自动重置：触发器和面板复用同一完整 Personal/Team scope；共享 in-flight 避免重复请求。
   const resetCodingPlanState = useMemo(
@@ -897,7 +924,8 @@ export function ChatContextUsage({
   if (
     (!renderableTaskUsage || !contextUsageLabel) &&
     !hasCodingPlanUsageRemaining &&
-    !hasStartPlanBalance
+    !hasStartPlanBalance &&
+    !hasProviderSelfUsage
   ) {
     return null;
   }
@@ -1093,6 +1121,19 @@ export function ChatContextUsage({
               separated={Boolean(
                 (renderableTaskUsage && compactTokenUsageLabel) ||
                 hasCodingPlanUsageRemaining,
+              )}
+            />
+          ) : null}
+          {providerSelfUsageWithClose && hasProviderSelfUsage ? (
+            <ChatProviderSelfUsagePanel
+              config={providerSelfUsageWithClose}
+              open={contextOpen}
+              intl={intl}
+              locale={locale}
+              separated={Boolean(
+                (renderableTaskUsage && compactTokenUsageLabel) ||
+                hasCodingPlanUsageRemaining ||
+                hasStartPlanBalance,
               )}
             />
           ) : null}

@@ -1,5 +1,9 @@
 /* eslint-disable max-lines -- 设置导航意图集中管理 sessionStorage、事件桥接和解析校验，拆分会让一次性意图消费顺序更难保证。 */
 import { logger } from "@/logger.js";
+import {
+  isProviderSelfQuotaTabId,
+  type ProviderSelfQuotaTabId,
+} from "@/lib/settingsUsageTabs.js";
 
 export type SettingsSectionId =
   | "general"
@@ -31,10 +35,10 @@ export type SettingsSectionId =
 /**
  * 使用统计的跳转意图 tab。
  *
- * "minimax" 是供应商自带额度 tab：跳转入口目前只会写 "codingPlan"，但 tab 回退
- * 判定要能原样透传 "minimax"，避免它被当成 codingPlan 误回退成 App Usage。
+ * 供应商自带额度/余额 tab（`providerSelfQuota:<providerId>`）也要能原样透传，
+ * 避免它被当成 codingPlan 误回退成 App Usage。
  */
-export type SettingsUsageTabTarget = "app" | "codingPlan" | "minimax";
+export type SettingsUsageTabTarget = "app" | "codingPlan" | ProviderSelfQuotaTabId;
 export type SettingsPluginTabTarget = "plugins" | "mcps" | "skills" | "commands";
 export type SettingsPluginNavigationOrigin = "plugin-store";
 
@@ -468,9 +472,13 @@ export function consumePendingSettingsUsageTab(): SettingsUsageTabTarget | undef
     if (raw !== null) {
       window.sessionStorage.removeItem(SETTINGS_USAGE_TAB_INTENT_KEY);
     }
-    return raw === "app" || raw === "codingPlan" ? raw : undefined;
+    if (raw === "app" || raw === "codingPlan") {
+      return raw;
+    }
+    // 供应商自带额度/余额 tab 的 id 形如 providerSelfQuota:<providerId>。
+    return raw !== null && isProviderSelfQuotaTabId(raw) ? raw : undefined;
   } catch {
-    // 忽略浏览器存储异常，不影响主流程。
+    // 忽略浏览器存储异常，不影响设置页打开。
     return undefined;
   }
 }

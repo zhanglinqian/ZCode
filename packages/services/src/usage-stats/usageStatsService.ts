@@ -31,6 +31,7 @@ import {
   fetchMinimaxTokenPlanQuota,
   isMinimaxQuotaBaseUrl,
 } from "./providers/minimaxQuotaProvider.js";
+import { fetchDeepseekBalance, isDeepseekBalanceBaseUrl } from "./providers/deepseekBalanceProvider.js";
 
 /**
  * 供应商自带额度查询的 provider 事实。
@@ -98,11 +99,12 @@ export function createUsageStatsService(
   const regularTpsInFlight = new Map<string, Promise<number | undefined>>();
 
   /**
-   * 供应商自带额度（当前是 MiniMax）的 entitlement 快照。
+   * 供应商自带额度（MiniMax 配额 / DeepSeek 余额）的 entitlement 快照。
    *
    * 与账号型额度是两条互斥的数据来源：GLM 的额度由 ZCode 服务端下发，
-   * MiniMax 的额度由 MiniMax 自己的 `token_plan/remains` 返回。命中供应商自带额度时
-   * 直接返回该快照，不再落回账号型链路，避免把 MiniMax 的 Key 当成账号材料去查服务端。
+   * MiniMax 的额度由 MiniMax 自己的 `token_plan/remains` 返回，DeepSeek 的余额由
+   * DeepSeek 自己的 `user/balance` 返回。命中供应商自带数据源时直接返回该快照，
+   * 不再落回账号型链路，避免把供应商的 Key 当成账号材料去查服务端。
    *
    * 只认 `preferredProviderId`：不按"当前选中的 provider"猜，避免误把别的供应商的额度
    * 挂到当前面板。
@@ -120,42 +122,76 @@ export function createUsageStatsService(
     } catch {
       return null;
     }
-    if (!facts || !isMinimaxQuotaBaseUrl(facts.baseUrl)) {
+    if (!facts) {
       return null;
     }
     const apiKey = facts.apiKey.trim();
     if (!apiKey) {
       return null;
     }
-    const snapshot = await fetchMinimaxTokenPlanQuota({
-      apiClient: dependencies.apiClient,
-      authorization: apiKey,
-      baseUrl: facts.baseUrl,
-      ...(dependencies.env ? { env: dependencies.env } : {}),
-    });
-    if (!snapshot) {
-      // Bug 修复（2026-11-26）：此前失败时返回 null，getEntitlementSnapshot 会落回
-      // BigModel/GLM 额度链路，把 GLM 套餐数据当成 MiniMax 的展示（用户报障
-      // 「切到 MiniMax tab 显示的还是 glm 的」）。已判定为 MiniMax 端点后绝不回落：
-      // 失败一律返回明确的 unavailable 快照，让 UI 展示失败态而不是别的供应商的数据。
+    // 命中供应商自带端点后绝不回落 GLM 账号型链路：失败也要返回明确的 unavailable
+    // 快照，否则会把 GLM 套餐数据当成该供应商的额度展示（2026-11-26 修复过的同类 bug）。
+    const providerInfo = { id: providerId, name: facts.providerName };
+
+    if (isMinimaxQuotaBaseUrl(facts.baseUrl)) {
+      const snapshot = await fetchMinimaxTokenPlanQuota({
+        apiClient: dependencies.apiClient,
+        authorization: apiKey,
+        baseUrl: facts.baseUrl,
+        ...(dependencies.env ? { env: dependencies.env } : {}),
+      });
+      if (!snapshot) {
+        return {
+          generatedAt: Date.now(),
+          authenticated: false,
+          unavailableReason: "unavailable",
+          provider: providerInfo,
+          remaining: null,
+          subscription: null,
+          quota: null,
+        };
+      }
       return {
         generatedAt: Date.now(),
-        authenticated: false,
-        unavailableReason: "unavailable",
-        provider: { id: providerId, name: facts.providerName },
+        authenticated: true,
+        provider: providerInfo,
+        remaining: null,
+        subscription: null,
+        quota: { level: snapshot.level, limits: snapshot.limits },
+      };
+    }
+
+    if (isDeepseekBalanceBaseUrl(facts.baseUrl)) {
+      const snapshot = await fetchDeepseekBalance({
+        apiClient: dependencies.apiClient,
+        authorization: apiKey,
+        baseUrl: facts.baseUrl,
+        ...(dependencies.env ? { env: dependencies.env } : {}),
+      });
+      if (!snapshot) {
+        return {
+          generatedAt: Date.now(),
+          authenticated: false,
+          unavailableReason: "unavailable",
+          provider: providerInfo,
+          remaining: null,
+          subscription: null,
+          quota: null,
+          providerBalance: null,
+        };
+      }
+      return {
+        generatedAt: Date.now(),
+        authenticated: true,
+        provider: providerInfo,
         remaining: null,
         subscription: null,
         quota: null,
+        providerBalance: snapshot,
       };
     }
-    return {
-      generatedAt: Date.now(),
-      authenticated: true,
-      provider: { id: providerId, name: facts.providerName },
-      remaining: null,
-      subscription: null,
-      quota: { level: snapshot.level, limits: snapshot.limits },
-    };
+
+    return null;
   }
 
   function regularTpsCacheKey(request: CodingPlanRegularTpsRequest): string {

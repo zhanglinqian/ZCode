@@ -84,11 +84,17 @@ import { ModelProviderSection } from "@/settings/ModelProviderSection.js";
 import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
 import { useEnterpriseCodingPlanProducts } from "@/settings/model-provider-section/useEnterpriseCodingPlanProducts.js";
 import { isProviderSelfQuotaBaseUrl } from "@/settings/model-provider-section/ProviderSelfQuotaSection.js";
+import { isProviderSelfBalanceBaseUrl } from "@/settings/model-provider-section/ProviderSelfBalanceSection.js";
 import {
   UsageStatsSection,
-  type UsageStatsMinimaxProvider,
   type UsageStatsSectionTab,
+  type UsageStatsSelfUsageKind,
+  type UsageStatsSelfUsageProvider,
 } from "@/settings/UsageStatsSection.js";
+import {
+  createProviderSelfQuotaTabId,
+  isProviderSelfQuotaTabId,
+} from "@/lib/settingsUsageTabs.js";
 import {
   buildCodingPlanUsageSources,
   type CodingPlanUsageSource,
@@ -181,13 +187,13 @@ function runSettingsActionAsync<T>(options: {
 function SettingsUsageProviderTabs({
   activeTab,
   codingPlanSources,
-  minimaxTab,
+  selfUsageTabs,
   onTabChange,
 }: {
   activeTab: UsageStatsSectionTab;
   codingPlanSources: CodingPlanUsageSource[];
-  /** MiniMax 供应商自带额度 tab；null 表示当前没有可查询的 MiniMax provider，不渲染该 tab。 */
-  minimaxTab?: { id: "minimax"; label: string } | null;
+  /** 供应商自带额度/余额 tab；空数组表示当前没有可查询的供应商，不渲染这些 tab。 */
+  selfUsageTabs?: { id: UsageStatsSectionTab; label: string }[];
   onTabChange: (tab: UsageStatsSectionTab) => void;
 }) {
   const { intl } = useZCodeIntl();
@@ -208,7 +214,7 @@ function SettingsUsageProviderTabs({
         source,
       }),
     })),
-    ...(minimaxTab ? [minimaxTab] : []),
+    ...(selfUsageTabs ?? []),
   ];
   const visibleActiveTab =
     activeTab === "codingPlan" && codingPlanSources[0]
@@ -657,28 +663,50 @@ export function SettingsPage({
     [usagePersonalCodingPlanSources, usageTeamCodingPlanSources],
   );
   /**
-   * MiniMax 供应商自带额度 tab 的事实来源。
+   * 供应商自带额度/余额 tab 的事实来源。
    *
-   * 只认「端点命中 MiniMax 官方 host 且已填 API Key」的 provider：没填 Key 时查询
-   * 必然失败，tab 不出现，避免给用户一个点了只报错的空入口。多个命中时取第一个，
-   * 与额度查询服务层的取用口径一致。
+   * 只认「端点命中供应商官方 host 且已填 API Key」的 provider：没填 Key 时查询
+   * 必然失败，tab 不出现，避免给用户一个点了只报错的空入口。
+   *
+   * MiniMax（配额窗口）与 DeepSeek（账户余额）是两类数据源，语义不同：
+   * 前者展示百分比额度卡，后者展示金额卡片，因此按 kind 分派到不同区块。
    */
-  const usageMinimaxQuotaProvider = useMemo<UsageStatsMinimaxProvider | null>(() => {
-    const provider = usageProviderSettingsView?.providers.find(
-      (candidate) =>
-        candidate.effectiveConfig.access?.type !== "zhipu-account" &&
-        Boolean(candidate.effectiveConfig.access?.apiKey?.trim()) &&
-        isProviderSelfQuotaBaseUrl(candidate.effectiveConfig.api?.baseUrl),
-    );
-    if (!provider) {
-      return null;
+  const usageSelfUsageProviders = useMemo<UsageStatsSelfUsageProvider[]>(() => {
+    const providers = usageProviderSettingsView?.providers ?? [];
+    const result: UsageStatsSelfUsageProvider[] = [];
+    for (const candidate of providers) {
+      if (candidate.effectiveConfig.access?.type === "zhipu-account") {
+        continue;
+      }
+      if (!candidate.effectiveConfig.access?.apiKey?.trim()) {
+        continue;
+      }
+      const baseUrl = candidate.effectiveConfig.api?.baseUrl ?? null;
+      const kind: UsageStatsSelfUsageKind | null = isProviderSelfBalanceBaseUrl(baseUrl)
+        ? "balance"
+        : isProviderSelfQuotaBaseUrl(baseUrl)
+          ? "quota"
+          : null;
+      if (!kind) {
+        continue;
+      }
+      result.push({
+        providerId: candidate.providerId,
+        providerName: candidate.providerName?.trim() || candidate.providerId,
+        baseUrl,
+        kind,
+      });
     }
-    return {
-      providerId: provider.providerId,
-      providerName: provider.providerName?.trim() || "MiniMax",
-      baseUrl: provider.effectiveConfig.api?.baseUrl ?? null,
-    };
+    return result;
   }, [usageProviderSettingsView]);
+  const usageSelfUsageTabs = useMemo(
+    () =>
+      usageSelfUsageProviders.map((provider) => ({
+        id: createProviderSelfQuotaTabId(provider.providerId),
+        label: provider.providerName,
+      })),
+    [usageSelfUsageProviders],
+  );
   const selectedUsageCodingPlanSourceId =
     usageActiveTab === "codingPlan"
       ? (usageCodingPlanSources[0]?.id ?? null)
@@ -902,9 +930,9 @@ export function SettingsPage({
   useEffect(() => {
     if (
       !shouldFallbackSettingsUsageTabToApp({
-        // MiniMax tab 与 codingPlan 的加载判定无关，原样透传，避免被误回退成 App Usage。
+        // 供应商自带额度/余额 tab 与 codingPlan 的加载无关，原样透传，避免被误回退成 App Usage
         activeTab:
-          usageActiveTab === "app" || usageActiveTab === "minimax"
+          usageActiveTab === "app" || isProviderSelfQuotaTabId(usageActiveTab)
             ? usageActiveTab
             : "codingPlan",
         checkingCodingPlanTab: checkingUsageCodingPlanTab,
@@ -1853,16 +1881,7 @@ export function SettingsPage({
                                   <SettingsUsageProviderTabs
                                     activeTab={usageActiveTab}
                                     codingPlanSources={usageCodingPlanSources}
-                                    minimaxTab={
-                                      usageMinimaxQuotaProvider
-                                        ? {
-                                            id: "minimax",
-                                            label:
-                                              usageMinimaxQuotaProvider.providerName.trim() ||
-                                              "MiniMax",
-                                          }
-                                        : null
-                                    }
+                                    selfUsageTabs={usageSelfUsageTabs}
                                     onTabChange={handleUsageTabSelect}
                                   />
                                 ) : null}
@@ -2258,7 +2277,7 @@ export function SettingsPage({
                               activeTab={usageActiveTab}
                               providerSourcesLoading={usageProviderSettingsLoading}
                               selectedCodingPlanSource={selectedUsageCodingPlanSource}
-                              minimaxProvider={usageMinimaxQuotaProvider}
+                              selfUsageProviders={usageSelfUsageProviders}
                               workspaceIdentity={activeWorkspaceIdentity}
                               workspacePath={activeWorkspacePath ?? undefined}
                             />

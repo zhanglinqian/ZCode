@@ -10,10 +10,10 @@
  * 只有「5 小时窗口 + 周窗口」两个额度桶，复用同一套卡片视觉单元，
  * 不引入 Coding Plan 的重置机会、订阅摘要等 ZCode 服务端专属交互。
  */
-import { useEffect, useMemo, useState } from "react";
-import type { UsageEntitlementSnapshot, UsageQuotaLimit } from "@zcode/shared";
+import { useMemo } from "react";
+import type { UsageQuotaLimit } from "@zcode/shared";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { useOptionalBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+import { useProviderSelfUsageSnapshot } from "./providerSelfUsageSnapshot.js";
 import { PlanUsageMetricCard } from "./StatusCards.js";
 
 /** 窗口额度桶的匹配口径，与 services 层 minimaxQuotaProvider 的映射保持一致。 */
@@ -53,72 +53,9 @@ function findWindowLimit(limits: readonly UsageQuotaLimit[], unit: number) {
  * 供应商自带额度的轻量查询：直接打 usage-stats RPC，不经过共享 entitlement 缓存，
  * 也不受登录态约束。providerId 或服务实例变化时重查；disabled 时清空。
  *
- * 带模块级 in-flight 去重与 30s TTL：设置页的 store 更新会让本组件频繁重渲染，
- * effect 依赖里的服务实例随之变化，无去重时会对 MiniMax 上游每秒发起多次请求
- * （2026-11-26 实测日志）。同一 provider 的并发请求共享同一个 Promise；
- * 30 秒内的重复挂载直接复用上次结果。
+ * 查询与 TTL 缓存由 `useProviderSelfUsageSnapshot` 统一提供，MiniMax 额度与 DeepSeek
+ * 余额共用同一份缓存，避免两条数据源各发一次上游请求。
  */
-const SELF_QUOTA_TTL_MS = 30_000;
-const selfQuotaCache = new Map<
-  string,
-  { expiresAt: number; snapshot: UsageEntitlementSnapshot | null; error: string | null }
->();
-
-function useProviderSelfQuotaSnapshot(providerId: string, enabled: boolean) {
-  const services = useOptionalBaseWorkspaceServices();
-  const usageStatsService = services?.usageStatsService;
-  const [state, setState] = useState<{
-    snapshot: UsageEntitlementSnapshot | null;
-    error: string | null;
-  }>(() => {
-    const cached = selfQuotaCache.get(providerId);
-    return cached && cached.expiresAt > Date.now()
-      ? { snapshot: cached.snapshot, error: cached.error }
-      : { snapshot: null, error: null };
-  });
-
-  useEffect(() => {
-    if (!enabled || !usageStatsService) {
-      return;
-    }
-    let cancelled = false;
-    const cached = selfQuotaCache.get(providerId);
-    if (cached && cached.expiresAt > Date.now()) {
-      setState({ snapshot: cached.snapshot, error: cached.error });
-      return;
-    }
-    setState({ snapshot: null, error: null });
-    usageStatsService
-      .getEntitlementSnapshot({
-        preferredProviderId: providerId,
-        // 额度属于当前 provider 自己，必须命中它，不能回退到别的供应商。
-        requirePreferredProvider: true,
-      })
-      .then((snapshot) => {
-        selfQuotaCache.set(providerId, {
-          expiresAt: Date.now() + SELF_QUOTA_TTL_MS,
-          snapshot,
-          error: null,
-        });
-        if (!cancelled) setState({ snapshot, error: null });
-      })
-      .catch((cause) => {
-        const message = cause instanceof Error ? cause.message : String(cause);
-        selfQuotaCache.set(providerId, {
-          expiresAt: Date.now() + SELF_QUOTA_TTL_MS,
-          snapshot: null,
-          error: message,
-        });
-        if (!cancelled) setState({ snapshot: null, error: message });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, providerId, usageStatsService]);
-
-  return state;
-}
-
 export function ProviderSelfQuotaSection({
   providerId,
   baseUrl,
@@ -130,7 +67,7 @@ export function ProviderSelfQuotaSection({
   const supported = isProviderSelfQuotaBaseUrl(baseUrl);
   // 端点不支持时不发请求：否则每次打开任意 API Key provider 都会多一次无意义的
   // entitlement 查询。
-  const { snapshot, error } = useProviderSelfQuotaSnapshot(providerId, supported);
+  const { snapshot, error } = useProviderSelfUsageSnapshot(providerId, supported);
 
   const limits = useMemo(() => snapshot?.quota?.limits ?? [], [snapshot]);
   if (!supported) {

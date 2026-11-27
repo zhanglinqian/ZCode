@@ -28,6 +28,7 @@ import {
 } from "./constants.js";
 import { InlineEditableProviderCard } from "./InlineEditableProviderCard.js";
 import { ProviderSelfQuotaSection } from "./ProviderSelfQuotaSection.js";
+import { ProviderSelfBalanceSection } from "./ProviderSelfBalanceSection.js";
 import {
   ModelProviderLoadingCard,
   PresetProviderPlaceholderCard,
@@ -853,13 +854,20 @@ export function ModelProviderSectionDetail({
       presetApiKeyUrl={customApiKeyUrl}
       readOnlyEndpoints={false}
       nameEditable
-      afterHeader={
-        // 额度属于当前供应商，放在同一卡片的标题下，复用区块间距。
-        <ProviderSelfQuotaSection
-          providerId={customProvider.providerId}
-          baseUrl={customProvider.config.api?.baseUrl}
-        />
-      }
+        afterHeader={
+          // 额度/余额属于当前供应商，放在同一卡片的标题下，复用区块间距。
+          // 两个区块各自按端点判定，不支持的端点直接不渲染、不发请求。
+          <>
+            <ProviderSelfQuotaSection
+              providerId={customProvider.providerId}
+              baseUrl={customProvider.config.api?.baseUrl}
+            />
+            <ProviderSelfBalanceSection
+              providerId={customProvider.providerId}
+              baseUrl={customProvider.config.api?.baseUrl}
+            />
+          </>
+        }
       onOpenPresetApiKey={
         customApiKeyUrl
           ? () => {

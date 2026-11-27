@@ -129,6 +129,83 @@ test("ordinary custom provider has no self-quota panel", async () => {
     await page.goto(`${origin}fixture?quota=ordinary`);
     await page.getByText("Base URL", { exact: true }).waitFor();
     assert.equal(await page.getByRole("heading", { name: "Quota remaining" }).count(), 0);
+    assert.equal(await page.getByRole("heading", { name: "Account balance" }).count(), 0);
+  } finally {
+    await page.close();
+  }
+});
+
+for (const [width, theme] of [
+  [1200, "dark"],
+  [390, "light"],
+]) {
+  test(`DeepSeek balance follows the provider header ${width}/${theme}`, async () => {
+    const page = await browser.newPage({ viewport: { width, height: 1000 } });
+    try {
+      await page.route("**/quota-snapshot", (route) =>
+        route.fulfill({
+          json: {
+            providerBalance: {
+              available: true,
+              balances: [
+                {
+                  currency: "CNY",
+                  totalBalance: 110,
+                  grantedBalance: 10,
+                  toppedUpBalance: 100,
+                },
+              ],
+            },
+          },
+        }),
+      );
+      await page.goto(`${origin}fixture?quota=deepseek&theme=${theme}`);
+      const header = page.getByTestId("model-provider-header");
+      const heading = page.getByRole("heading", { name: "Account balance" });
+      const total = page.getByText("Total balance", { exact: true });
+      await heading.waitFor();
+      const [headerBox, headingBox, totalBox, connectionBox, modelsBox] = await Promise.all(
+        [
+          header,
+          heading,
+          total,
+          page.getByText("Base URL", { exact: true }),
+          page.getByText("Model list", { exact: true }),
+        ].map((item) => item.boundingBox()),
+      );
+      assert.ok(headerBox.y + headerBox.height < headingBox.y);
+      assert.ok(headingBox.y < totalBox.y);
+      assert.ok(totalBox.y < connectionBox.y && connectionBox.y < modelsBox.y);
+      // 余额是金额而非配额百分比：展示金额，不得出现百分比文案。
+      assert.equal(await page.getByText("¥110.00", { exact: true }).count(), 1);
+      assert.equal(await page.getByText("¥10.00", { exact: true }).count(), 1);
+      assert.equal(await page.getByText("¥100.00", { exact: true }).count(), 1);
+      assert.equal(await page.getByText("Granted", { exact: true }).count(), 1);
+      assert.equal(await page.getByText("Topped up", { exact: true }).count(), 1);
+      // 配额区块不应出现：DeepSeek 端点不命中 MiniMax 额度来源。
+      assert.equal(await page.getByRole("heading", { name: "Quota remaining" }).count(), 0);
+      await mkdir(artifacts, { recursive: true });
+      await page.screenshot({ path: join(artifacts, `deepseek-balance-${width}.png`) });
+    } finally {
+      await page.close();
+    }
+  });
+}
+
+test("DeepSeek balance failure shows the unavailable hint", async () => {
+  const page = await browser.newPage();
+  try {
+    await page.route("**/quota-snapshot", (route) =>
+      route.fulfill({
+        status: 401,
+        json: { error: { message: "invalid api key" } },
+      }),
+    );
+    await page.goto(`${origin}fixture?quota=deepseek`);
+    await page
+      .getByText("Unable to read account balance. Make sure the API key is valid.", { exact: true })
+      .waitFor();
+    assert.equal(await page.getByText("¥110.00", { exact: true }).count(), 0);
   } finally {
     await page.close();
   }

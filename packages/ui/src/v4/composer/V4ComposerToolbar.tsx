@@ -56,6 +56,13 @@ import {
   hasChatStartPlanBalance,
   type ChatStartPlanBalanceConfig,
 } from "@/chat-input-toolbar/StartPlanContextBalance.js";
+import {
+  hasChatProviderSelfUsage,
+  type ChatProviderSelfUsageConfig,
+} from "@/chat-input-toolbar/ProviderSelfContextUsage.js";
+import { isProviderSelfQuotaBaseUrl } from "@/settings/model-provider-section/ProviderSelfQuotaSection.js";
+import { isProviderSelfBalanceBaseUrl } from "@/settings/model-provider-section/ProviderSelfBalanceSection.js";
+import { createProviderSelfQuotaTabId } from "@/lib/settingsUsageTabs.js";
 import { ThoughtLevelCycleControl } from "@/chat-input-toolbar/ThoughtLevelCycleControl.js";
 import {
   getNextThoughtLevelValue,
@@ -641,6 +648,59 @@ function V4ComposerModelControlsImpl({
   const contextStartPlanBalance = hasChatStartPlanBalance(contextStartPlanBalanceConfig)
     ? contextStartPlanBalanceConfig
     : undefined;
+
+  /**
+   * 供应商自带额度/余额（MiniMax 用量 / DeepSeek 余额）的 context 面板事实。
+   *
+   * 与 Coding Plan / Start Plan 连接互斥：当前模型命中账号型连接时本段不挂载。
+   * 只认「端点命中供应商官方 host 且已填 API Key」的 provider：数据在面板打开时
+   * 经面板内 hook 拉取（composer 挂载不请求），「更多」直达使用统计页对应 tab。
+   */
+  const contextProviderSelfUsage = useMemo<ChatProviderSelfUsageConfig | undefined>(() => {
+    if (contextPlanConnection.kind !== "none") {
+      return undefined;
+    }
+    const providerId = effectiveConfig?.provider?.trim();
+    if (!providerId) {
+      return undefined;
+    }
+    const provider = providerSettingsView?.providers.find(
+      (candidate) => candidate.providerId === providerId,
+    );
+    if (!provider || provider.effectiveConfig.access?.type === "zhipu-account") {
+      return undefined;
+    }
+    if (!provider.effectiveConfig.access?.apiKey?.trim()) {
+      return undefined;
+    }
+    const baseUrl = provider.effectiveConfig.api?.baseUrl ?? null;
+    const kind: ChatProviderSelfUsageConfig["kind"] | null = isProviderSelfBalanceBaseUrl(
+      baseUrl,
+    )
+      ? "balance"
+      : isProviderSelfQuotaBaseUrl(baseUrl)
+        ? "quota"
+        : null;
+    if (!kind) {
+      return undefined;
+    }
+    return {
+      providerId,
+      providerName: provider.providerName?.trim() || providerId,
+      kind,
+      onUsageClick: () => {
+        setPendingSettingsSectionIntent("usage", {
+          usageTab: createProviderSelfQuotaTabId(providerId),
+        });
+        openSettingsTab();
+      },
+    };
+  }, [
+    contextPlanConnection.kind,
+    effectiveConfig?.provider,
+    openSettingsTab,
+    providerSettingsView,
+  ]);
 
   // 按当前连接 family 拉取团队产品，避免 zai 团队误用 bigmodel 产品目录。
   const connectionFamily =
@@ -1305,6 +1365,11 @@ function V4ComposerModelControlsImpl({
           codingPlanUsageRemaining={codingPlanUsageRemaining}
           taskUsage={taskUsage}
           startPlanBalance={contextStartPlanBalance}
+          providerSelfUsage={
+            hasChatProviderSelfUsage(contextProviderSelfUsage)
+              ? contextProviderSelfUsage
+              : undefined
+          }
           selectedProvider={displayProvider}
           intl={intl}
           locale={locale}

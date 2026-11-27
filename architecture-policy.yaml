@@ -2053,6 +2053,17 @@ exceptions:
       - packages/services/src/usage-stats/providers/minimaxQuotaProvider.ts
       - packages/ui/src/settings/model-provider-section/ProviderSelfQuotaSection.tsx
     reason: MiniMax 套餐额度由 MiniMax 官方 token_plan/remains 直查（GLM 走的是 ZCode 服务端 zcode-plan/billing/balance），故在既有 usage-stats providers 目录新增一个同层 provider，并在既有 provider 设置详情旁新增一个额度区块组件；沿用 usage-stats 与 model-provider-section 的既有边界，复用 usageStatsService 与 PlanUsageMetricCard，不新增平行状态，接管整个 services/ui 未受管模块不在本次范围内（spec：docs/builtin-provider-maintenance/minimax-account-provider-family.md）。
+  - id: deepseek-provider-balance-new-files
+    rule: unmanaged-new-file
+    paths:
+      - packages/services/src/usage-stats/providers/deepseekBalanceProvider.ts
+      - packages/shared/src/usage-provider-balance.ts
+      - packages/ui/src/settings/model-provider-section/ProviderSelfBalanceSection.tsx
+      - packages/ui/src/settings/model-provider-section/providerSelfUsageSnapshot.ts
+      - packages/ui/src/settings/model-provider-section/selfBalanceFormat.ts
+      - packages/ui/src/chat-input-toolbar/ProviderSelfContextUsage.tsx
+      - packages/ui/src/lib/settingsUsageTabs.ts
+    reason: DeepSeek 账户余额由 DeepSeek 官方 user/balance 直查（GLM 走的是 ZCode 服务端 zcode-plan/billing/balance），故在既有 usage-stats providers 目录新增一个同层 provider，并在 shared 增补余额纯类型（余额是货币金额，与配额的百分比语义不同，不能共用 UsageQuotaLimit）；UI 侧新增余额区块组件与金额格式化共享模块，把 MiniMax 额度区块的查询 hook 抽为额度/余额共用模块，另新增使用统计 tab id 的公共定义供 lib 与 settings 共用，以及聊天 context 面板的供应商自带数据段（复用 Coding Plan compact meter 与同一份 TTL 缓存，不新增平行状态）；沿用 usage-stats、shared、model-provider-section 与 chat-input-toolbar 的既有边界，接管整个 services/shared/ui 未受管模块不在本次范围内（spec：docs/model-provider-deepseek-balance.md）。
   - id: region-copy-suggested-prompts-edit
     rule: unmanaged-new-file
     paths: [packages/ui/src/v4/featureSuggestedPrompts.ts]
