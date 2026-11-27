@@ -92,10 +92,7 @@ import {
   type UsageStatsSelfUsageKind,
   type UsageStatsSelfUsageProvider,
 } from "@/settings/UsageStatsSection.js";
-import {
-  createProviderSelfQuotaTabId,
-  isProviderSelfQuotaTabId,
-} from "@/lib/settingsUsageTabs.js";
+import { createProviderSelfQuotaTabId, isProviderSelfQuotaTabId } from "@/lib/settingsUsageTabs.js";
 import {
   buildCodingPlanUsageSources,
   type CodingPlanUsageSource,
@@ -761,6 +758,10 @@ export function SettingsPage({
     if (
       usageActiveTab === "app" ||
       usageActiveTab === "codingPlan" ||
+      // 供应商自带额度/余额 tab（providerSelfQuota:<providerId>）是合法 tab：
+      // 本 effect 只负责归位失效的 codingPlan 来源，不认识这个前缀会把
+      // MiniMax/DeepSeek tab 在点击后立即打回 App Usage（实测回归）。
+      isProviderSelfQuotaTabId(usageActiveTab) ||
       selectedUsageCodingPlanSource
     ) {
       return;
