@@ -150,6 +150,7 @@ export function InlineEditableProviderCard({
   readOnlyEndpoints,
   presetApiKeyUrl,
   onOpenPresetApiKey,
+  afterHeader,
   statusSection,
   nameEditable,
   headerVisible = true,
@@ -177,6 +178,7 @@ export function InlineEditableProviderCard({
   readOnlyEndpoints?: boolean;
   presetApiKeyUrl?: string;
   onOpenPresetApiKey?: () => void;
+  afterHeader?: ReactNode;
   statusSection?: ReactNode;
   nameEditable?: boolean;
   headerVisible?: boolean;
@@ -805,6 +807,7 @@ export function InlineEditableProviderCard({
         />
       ) : null}
 
+      {afterHeader}
       {statusSection}
 
       <div className="space-y-3">

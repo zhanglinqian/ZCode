@@ -28,6 +28,12 @@ before(async () => {
       tailwindcss(),
       {
         name: "provider-settings-batch-fixture",
+        enforce: "pre",
+        load(id) {
+          if (id.endsWith("/settings/CodingPlanUpgradeDialogProvider.tsx")) {
+            return "export const useCodingPlanUpgradeDialog=()=>({openCodingPlanUpgrade:()=>false}); export const useOptionalCodingPlanUpgradeDialog=()=>null;";
+          }
+        },
         configureServer(vite) {
           vite.middlewares.use(async (req, res, next) => {
             if (!req.url?.startsWith("/fixture?")) return next();
@@ -65,6 +71,68 @@ registerOffPeakEligibilityCases(() => ({ browser, origin }));
 registerProviderPresentationCases(() => ({ browser, origin, artifacts }));
 registerProviderModelEditorCases(() => ({ browser, origin, artifacts }));
 registerProgressiveModelEditorCases(() => ({ browser, origin, artifacts }));
+
+for (const [width, theme] of [
+  [1200, "dark"],
+  [390, "light"],
+]) {
+  test(`MiniMax quota follows the provider header ${width}/${theme}`, async () => {
+    const page = await browser.newPage({ viewport: { width, height: 1000 } });
+    try {
+      await page.route("**/quota-snapshot", (route) =>
+        route.fulfill({
+          json: {
+            quota: {
+              limits: [
+                { type: "TOKENS_LIMIT", unit: 3, number: 5, percentage: 100, usageDetails: [] },
+                { type: "TOKENS_LIMIT", unit: 6, percentage: 0, usageDetails: [] },
+              ],
+            },
+          },
+        }),
+      );
+      await page.goto(`${origin}fixture?quota=minimax&theme=${theme}`);
+      const header = page.getByTestId("model-provider-header");
+      const heading = page.getByRole("heading", { name: "Quota remaining" });
+      const fiveHour = page.getByText("5-hour remaining", { exact: true });
+      const weekly = page.getByText("Weekly remaining", { exact: true });
+      await weekly.waitFor();
+      const [headerBox, headingBox, fiveHourBox, weeklyBox, connectionBox, modelsBox] =
+        await Promise.all(
+          [
+            header,
+            heading,
+            fiveHour,
+            weekly,
+            page.getByText("Base URL", { exact: true }),
+            page.getByText("Model list", { exact: true }),
+          ].map((item) => item.boundingBox()),
+        );
+      assert.ok(headerBox.y + headerBox.height < headingBox.y);
+      assert.ok(headingBox.y < fiveHourBox.y);
+      assert.ok(weeklyBox.y < connectionBox.y && connectionBox.y < modelsBox.y);
+      assert.equal(fiveHourBox.y === weeklyBox.y, width > 600);
+      assert.equal(await page.getByText("General", { exact: true }).count(), 0);
+      assert.equal(await page.getByText("0%", { exact: true }).count(), 1);
+      assert.equal(await page.getByText("100%", { exact: true }).count(), 1);
+      await mkdir(artifacts, { recursive: true });
+      await page.screenshot({ path: join(artifacts, `minimax-quota-${width}.png`) });
+    } finally {
+      await page.close();
+    }
+  });
+}
+
+test("ordinary custom provider has no self-quota panel", async () => {
+  const page = await browser.newPage();
+  try {
+    await page.goto(`${origin}fixture?quota=ordinary`);
+    await page.getByText("Base URL", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: "Quota remaining" }).count(), 0);
+  } finally {
+    await page.close();
+  }
+});
 for (const [width, locale, theme] of [
   [390, "zh-CN", "light"],
   [1200, "en-US", "dark"],

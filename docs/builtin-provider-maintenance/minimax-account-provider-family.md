@@ -49,7 +49,7 @@ Content-Type: application/json
 | `packages/services/src/node.ts` | 注入 `resolveProviderSelfQuotaFacts`：从 `providerRuntime.registryService` 读该 provider 的 `config.access.apiKey` 与 `config.api.baseUrl`，账号型 provider 直接返回 null |
 | `packages/ui/src/settings/model-provider-section/ProviderSelfQuotaSection.tsx`（新） | 额度区块：`isProviderSelfQuotaBaseUrl` 判定端点是否支持，支持才发请求；`useUsageEntitlement({ preferredProviderId, requirePreferredProvider: true })` 取快照；按 `unit` 取 5 小时（3）与周（6）两条额度，用 `PlanUsageMetricCard` 渲染；查询失败时展示「需订阅 Key」提示 |
 | `packages/ui/src/settings/model-provider-section/StatusCards.tsx` | 仅把 `PlanUsageMetricCard` 改为导出，供第二条额度来源复用同一套卡片渲染 |
-| `packages/ui/src/settings/model-provider-section/Detail.tsx` | API Key 型 provider 详情分支上方挂载 `ProviderSelfQuotaSection` |
+| `packages/ui/src/settings/model-provider-section/Detail.tsx`、`InlineEditableProviderCard.tsx` | MiniMax 额度作为供应商标题后的区块，复用详情卡片的区块间距 |
 | `packages/ui/src/i18n/locales/*.ts`（5 个） | 新增 `settings.modelProvider.selfQuota.unavailable` |
 | `architecture-policy.yaml` | 为两个新文件登记 `unmanaged-new-file` 例外（沿既有 usage-stats / model-provider-section 边界，不接管整个 services/ui 未受管模块） |
 
@@ -61,6 +61,12 @@ Content-Type: application/json
 | 周窗口 | `type: "TOKENS_LIMIT"`, `unit: 6` |
 
 与 `StatusCards.tsx` 里 `findUsageLimit(limits, "TOKENS_LIMIT", 3, 5)` / `(…, 6)` 的口径一致，i18n 文案复用 `settings.usage.entitlementFiveHourUsage`（5 小时剩余）与 `settings.usage.entitlementWeeklyUsage`（每周剩余）。
+
+### 展示与验收
+
+- 模型设置的 MiniMax 详情按「供应商标题 → 剩余额度 → 连接配置 → 模型列表」排列，使用卡片现有区块间距；其它供应商的布局不变。
+- `general` 是跨模型的共享池，不是模型。共享池的 `usageDetails` 为空，窗口额度和重置时间仍完整展示；非共享桶保留已有的模型明细。模型设置与使用统计的 MiniMax 卡片都不显示 `General` 模型字幕。
+- 桌面宽度下两张额度卡并排、窄窗口可换为纵排；标题、额度和连接配置不相互遮挡。未登录 ZCode 时仍可凭 MiniMax 订阅 Key 查询，失败态不回退 GLM。
 
 ## 三、非目标
 
@@ -94,7 +100,7 @@ Content-Type: application/json
 2026-11-26 用户实测发现并修复两个缺陷（均已重新打包安装）：
 
 1. **GLM 回落 bug**：分派层在 MiniMax 请求失败时落回 GLM 额度链路，导致「MiniMax tab 显示的还是 glm 的」。修复：判定为 MiniMax 端点后绝不回落，失败返回 unavailable 快照（`usageStatsService.ts`）。
-2. **登录门槛 bug**：Fenjue 隔离实例未登录 ZCode 时 `useUsageEntitlement` 的 signed-out 门槛禁用了全部额度查询（日志：`getEntitlementSnapshot` 调用数 0）。修复：`ProviderSelfQuotaSection` 改为组件内直调 usage-stats RPC，不再走带登录门槛的共享 hook——MiniMax 凭订阅 Key 直查，本就不依赖平台登录。用户报的「全部报错」实为 App Usage tab 的 `no_active_workspace`（全新实例没开 workspace 的既有行为，与本功能无关）。
+2. **登录门槛 bug**：Fen Jue 隔离实例未登录 ZCode 时 `useUsageEntitlement` 的 signed-out 门槛禁用了全部额度查询（日志：`getEntitlementSnapshot` 调用数 0）。修复：`ProviderSelfQuotaSection` 改为组件内直调 usage-stats RPC，不再走带登录门槛的共享 hook——MiniMax 凭订阅 Key 直查，本就不依赖平台登录。用户报的「全部报错」实为 App Usage tab 的 `no_active_workspace`（全新实例没开 workspace 的既有行为，与本功能无关）。
 3. `minimaxQuotaProvider` 增加响应体日志（截断 512 字符），用于下一步按真实响应校准字段。
 4. 待验证：真实订阅 Key 下的字段/端点匹配（校准命令见上文）。
 

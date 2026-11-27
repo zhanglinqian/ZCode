@@ -839,36 +839,35 @@ export function ModelProviderSectionDetail({
     ? getProviderFormApiKeyManagementUrl(customProvider)
     : undefined;
   return (
-    <>
-      {/* 供应商自带额度（当前 MiniMax）：端点命中才渲染，其它 provider 不受影响。 */}
-      <ProviderSelfQuotaSection
-        providerId={customProvider.providerId}
-        baseUrl={customProvider.config.api?.baseUrl}
-      />
-      {/* 仅展示预设模板声明的入口，不根据地址猜测自定义 Provider 的 Key 控制台。 */}
-      <InlineEditableProviderCard
-        provider={customProvider}
-        onSave={onSave}
-        {...modelEditingProps}
-        onDelete={() => onDelete(customProvider)}
-        onReorderModelIds={
-          onReorderProviderModels
-            ? (modelIds) => onReorderProviderModels(customProvider.providerId, modelIds)
-            : undefined
-        }
-        onTestModel={onTestModel}
-        presetApiKeyUrl={customApiKeyUrl}
-        readOnlyEndpoints={false}
-        nameEditable
-        onOpenPresetApiKey={
-          customApiKeyUrl
-            ? () => {
-                onOpenApiKeyUrl(customApiKeyUrl);
-              }
-            : undefined
-        }
-      />
-    </>
+    <InlineEditableProviderCard
+      provider={customProvider}
+      onSave={onSave}
+      {...modelEditingProps}
+      onDelete={() => onDelete(customProvider)}
+      onReorderModelIds={
+        onReorderProviderModels
+          ? (modelIds) => onReorderProviderModels(customProvider.providerId, modelIds)
+          : undefined
+      }
+      onTestModel={onTestModel}
+      presetApiKeyUrl={customApiKeyUrl}
+      readOnlyEndpoints={false}
+      nameEditable
+      afterHeader={
+        // 额度属于当前供应商，放在同一卡片的标题下，复用区块间距。
+        <ProviderSelfQuotaSection
+          providerId={customProvider.providerId}
+          baseUrl={customProvider.config.api?.baseUrl}
+        />
+      }
+      onOpenPresetApiKey={
+        customApiKeyUrl
+          ? () => {
+              onOpenApiKeyUrl(customApiKeyUrl);
+            }
+          : undefined
+      }
+    />
   );
 }
 

@@ -320,6 +320,8 @@ export async function fetchMinimaxTokenPlanQuota(params: {
   }
 
   const modelName = readString(entry, "model_name", "modelName") ?? "MiniMax";
+  // general 是跨模型共享池，不能在额度卡中作为真实模型明细展示。
+  const isSharedPool = modelName.toLowerCase() === "general";
   // 两个窗口各自独立的剩余百分比与重置时间（2026-11-26 实测字段）；
   // usage_percent 仅作旧字段兜底。
   const fiveHourRemainingPercent =
@@ -344,9 +346,9 @@ export async function fetchMinimaxTokenPlanQuota(params: {
     unit: FIVE_HOUR_LIMIT_UNIT,
     number: FIVE_HOUR_LIMIT_NUMBER,
     ...(fiveHourReset === undefined ? {} : { nextResetTime: fiveHourReset }),
-    usageDetails: [
-      { modelCode: modelName, displayName: modelName, usage: fiveHourUsed ?? 0 },
-    ],
+    usageDetails: isSharedPool
+      ? []
+      : [{ modelCode: modelName, displayName: modelName, usage: fiveHourUsed ?? 0 }],
   });
   const weekly = buildWindowLimit({
     total: readNumber(entry, "current_weekly_total_count", "currentWeeklyTotalCount"),
@@ -354,7 +356,9 @@ export async function fetchMinimaxTokenPlanQuota(params: {
     ...(weeklyRemainingPercent === undefined ? {} : { remainingPercent: weeklyRemainingPercent }),
     unit: WEEKLY_LIMIT_UNIT,
     ...(weeklyReset === undefined ? {} : { nextResetTime: weeklyReset }),
-    usageDetails: [{ modelCode: modelName, displayName: modelName, usage: weeklyUsed ?? 0 }],
+    usageDetails: isSharedPool
+      ? []
+      : [{ modelCode: modelName, displayName: modelName, usage: weeklyUsed ?? 0 }],
   });
 
   const limits = [fiveHour, weekly].filter((limit): limit is UsageQuotaLimit => limit !== null);

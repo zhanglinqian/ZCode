@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip.js";
 import { ProviderTemplatePicker } from "@/settings/model-provider-section/ProviderTemplatePicker.js";
 import { ProviderDetailFeedbackBoundary } from "@/settings/model-provider-section/ProviderDetailFeedback.js";
 import { InlineEditableProviderCard } from "@/settings/model-provider-section/InlineEditableProviderCard.js";
+import { ModelProviderSectionDetail } from "@/settings/model-provider-section/Detail.js";
 import {
   BooleanModelOption,
   JsonSlotEditor,
@@ -84,6 +85,40 @@ function createProvider(templateId: string): ProviderSettingsFormProvider {
     })),
   };
 }
+function QuotaDetailFixture() {
+  const provider = createProvider(params.get("quota") === "minimax" ? "minimax" : "bigmodel-api");
+  return (
+    <main className="min-h-screen bg-card p-4 text-foreground">
+      <ProviderDetailFeedbackBoundary>
+        <ModelProviderSectionDetail
+          selectedNavItem={{
+            type: "custom",
+            key: provider.providerId,
+            label: provider.providerName,
+            provider,
+            statusActive: provider.enabled,
+          }}
+          presetLoading={false}
+          codingPlanPurchaseTokenAuthenticatedByProviderId={{}}
+          presetSubscriptionProviderId={null}
+          codingPlanStatusSyncProviderId={null}
+          codingPlanDisconnectProviderId={null}
+          onSave={() => undefined}
+          onDelete={async () => undefined}
+          onTestModel={async () => {
+            throw new Error("Unexpected connectivity test");
+          }}
+          onCodingPlanLogin={() => undefined}
+          onCodingPlanDisconnect={() => undefined}
+          onOpenApiKeyUrl={() => undefined}
+          onOpenBigModelRegistration={() => undefined}
+          onCodingPlanPurchaseComplete={() => undefined}
+        />
+      </ProviderDetailFeedbackBoundary>
+    </main>
+  );
+}
+
 function Fixture() {
   const [provider, setProvider] = useState(() => createProvider("bigmodel-api"));
   const [picker, setPicker] = useState(!params.has("access"));
@@ -251,6 +286,9 @@ createRoot(document.getElementById("root")!).render(
   <ServiceProvider
     services={
       {
+        usageStatsService: {
+          getEntitlementSnapshot: async () => (await fetch("/quota-snapshot")).json(),
+        },
         providerSettingsService: {
           resolveModelConfig: async (input: { modelId: string }) => {
             const response = await fetch(`/resolve?id=${encodeURIComponent(input.modelId)}`);
@@ -263,7 +301,9 @@ createRoot(document.getElementById("root")!).render(
   >
     <TooltipProvider>
       <ZCodeIntlProvider initialLocale={params.get("locale") === "zh-CN" ? "zh-CN" : "en-US"}>
-        {params.has("teamEntry") ? (
+        {params.has("quota") ? (
+          <QuotaDetailFixture />
+        ) : params.has("teamEntry") ? (
           <OffPeakTeamEntryFixture />
         ) : params.has("offpeak") ? (
           <OffPeakEligibilityFixture />
