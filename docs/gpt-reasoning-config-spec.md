@@ -29,6 +29,8 @@ Anthropic Messages 及供应商专有协议继续使用原协议规则，不强�
 专项层只能由当前安装包的 bundled release 决定，远端提供同名字段不能替换它。Host 将所选官方配置与专项层原子物化到 Active，CLI Worker 读取同一文件，重启后仍保留；无专项层的包维持原行为。
 专项层的内容指纹进入发布快照 revision，使官方版本未变而安装包专项规则变化时也能使派生缓存失效。
 
+> 2026-11-28 起机制说明以 [内置配置专项层](fen-jue/package-overrides.md) 为准：专项层扩为两层（本文件描述的模型规则，加上模板模型插入 `providerConfigOverrides`）；Bundled 的 `revision` 已还原为上游的 44；OpenAI 模板里的 GPT-6.2 不再直接写进官方列表，改由模板专项层声明。本文件保留 GPT 推理档位的产品规则与验收。
+
 已确认旧包失败根因：包内 revision 45 被用户运行目录中的官方 revision 48 选中覆盖；旧隔离用例只读取 bundled，未模拟更高版本 Active。新增验收必须从真实 Source 读写隔离 Active 并经过 Worker 重读，不能只合并 JSON 验证。
 
 ```mermaid
@@ -67,3 +69,9 @@ flowchart LR
 ### 远端覆盖修复验证
 
 CLI 请求回归 40 项、完整模型运行时集成 4 项、浏览器两项通过。新增 Source 集成用例复现更高版本 Active 和陈旧模板覆盖，检查连续官方刷新、同版本幂等、无关模型更新、Host 重启、Worker 重读、无专项层的旧包回退；浏览器用例改为从真实 Source 加载 revision 48 的隔离 Active。类型检查、架构检查通过，完整 lint 为 0 错误、538 条存量警告。Agent CLI 已重新编译并检查包含新信封字段，不复用旧 Worker。
+
+### Bundled 不可读防护（mac 复现归因补充）
+
+2026-11-27 mac 复现归因：composer 档位来自 CLI Worker 以 Active 为唯一配置源的解析结果；旧构建的远端刷新把 Active 写成无专项层的纯官方 release 后，网络故障延长了坏文件的存续时间，Host 内存快照正确也不能阻止 UI 复现。网络恢复后远端刷新重写 Active（带专项层）并经 file-changed 交付，全链路自愈。
+
+据此新增防护：Bundled 文件不可读（非"声明无 overrides"）时，`#readAndMaterializeLocked` 与 `read()` 降级分支回退选中 release 自带的 overrides，不再把 Active 已存专项层整块擦掉或交出无专项层快照；Bundled 可读时仍是权威来源，旧包不带 overrides 仍按刻意声明清除，不继承前一安装包的覆盖。集成用例补"Bundled 路径不可读：快照 revision 保留 overrides 指纹、GPT-6.2 五档、Active 内容不被降级改写"，连同旧包不继承用例共 5 项通过；刷新节奏 8 项通过；完整 typecheck、lint（0 错误）、架构检查通过。

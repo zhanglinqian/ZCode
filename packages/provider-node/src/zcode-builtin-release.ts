@@ -10,12 +10,29 @@ import {
 export const ZCODE_BUILTIN_RELEASE_SCHEMA_VERSION = 1 as const;
 const RETIRED_ZAPI_PROVIDER_ID = "builtin:zapi";
 
+/** 模板模型插入位置：补在官方列表之前或之后。 */
+export type ProviderTemplateModelInsertPosition = "start" | "end";
+
+/** 包内专项的模板模型插入：只向该模板的 builtinModelIds 补 ID，不替换官方列表。 */
+export interface ProviderTemplateConfigOverride {
+  readonly templateId: string;
+  readonly builtinModelIds: readonly string[];
+  readonly at: ProviderTemplateModelInsertPosition;
+}
+
+/** 包内专项模板层；Source 只信任当前 Bundled 提供的这一层。 */
+export interface ProviderConfigOverrides {
+  readonly templateRules: readonly ProviderTemplateConfigOverride[];
+}
+
 export interface ZCodeBuiltinConfigContent {
   readonly providers: ProviderConfigMap;
   readonly providerTemplates: ProviderTemplateMap;
   readonly modelConfigRules: ModelConfigRules;
-  /** 包内专项规则；Source 只信任当前 Bundled 提供的这一层。 */
+  /** 包内专项模型规则；Source 只信任当前 Bundled 提供的这一层。 */
   readonly modelConfigOverrides?: ModelConfigRules;
+  /** 包内专项模板层；Source 只信任当前 Bundled 提供的这一层。 */
+  readonly providerConfigOverrides?: ProviderConfigOverrides;
 }
 
 export interface ZCodeBuiltinRelease {
@@ -23,6 +40,42 @@ export interface ZCodeBuiltinRelease {
   readonly revision: number;
   readonly config: ZCodeBuiltinConfigContent;
 }
+
+const providerConfigOverridesSchema = z
+  .object({
+    templateRules: z
+      .array(
+        z
+          .object({
+            templateId: z.string().trim().min(1),
+            builtinModelIds: z.array(z.string().trim().min(1)).min(1),
+            at: z.enum(["start", "end"]).default("end"),
+          })
+          .strict(),
+      )
+      .min(1),
+  })
+  .strict()
+  .superRefine((overrides, context) => {
+    const templateIds = new Set<string>();
+    overrides.templateRules.forEach((rule, index) => {
+      if (templateIds.has(rule.templateId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["templateRules", index, "templateId"],
+          message: `专项模板层 templateId 重复: ${rule.templateId}`,
+        });
+      }
+      templateIds.add(rule.templateId);
+      if (new Set(rule.builtinModelIds).size !== rule.builtinModelIds.length) {
+        context.addIssue({
+          code: "custom",
+          path: ["templateRules", index, "builtinModelIds"],
+          message: `专项模板层 builtinModelIds 重复: ${rule.templateId}`,
+        });
+      }
+    });
+  });
 
 const releaseSchema = z
   .object({
@@ -33,6 +86,7 @@ const releaseSchema = z
         providerConfigRules: z.unknown(),
         modelConfigRules: z.unknown(),
         modelConfigOverrides: z.unknown().optional(),
+        providerConfigOverrides: z.unknown().optional(),
       })
       .strict(),
   })
@@ -62,8 +116,40 @@ export function decodeZCodeBuiltinRelease(input: unknown): ZCodeBuiltinRelease {
               parsed.config.modelConfigOverrides,
             ),
           }),
+      ...(parsed.config.providerConfigOverrides === undefined
+        ? {}
+        : {
+            providerConfigOverrides: parseZCodeBuiltinProviderConfigOverrides(
+              parsed.config.providerConfigOverrides,
+            ),
+          }),
     }),
   });
+}
+
+export function parseZCodeBuiltinProviderConfigOverrides(input: unknown): ProviderConfigOverrides {
+  const parsed = providerConfigOverridesSchema.parse(input);
+  return Object.freeze({
+    templateRules: Object.freeze(
+      parsed.templateRules.map((rule) =>
+        Object.freeze({
+          templateId: rule.templateId,
+          builtinModelIds: Object.freeze([...rule.builtinModelIds]),
+          at: rule.at,
+        }),
+      ),
+    ),
+  });
+}
+
+export function encodeProviderConfigOverrides(overrides: ProviderConfigOverrides): object {
+  return {
+    templateRules: overrides.templateRules.map((rule) => ({
+      templateId: rule.templateId,
+      builtinModelIds: [...rule.builtinModelIds],
+      at: rule.at,
+    })),
+  };
 }
 
 export function encodeZCodeBuiltinRelease(release: ZCodeBuiltinRelease): object {
@@ -79,6 +165,13 @@ export function encodeZCodeBuiltinRelease(release: ZCodeBuiltinRelease): object 
       ...(release.config.modelConfigOverrides === undefined
         ? {}
         : { modelConfigOverrides: release.config.modelConfigOverrides.toZCodeBuiltinJSON() }),
+      ...(release.config.providerConfigOverrides === undefined
+        ? {}
+        : {
+            providerConfigOverrides: encodeProviderConfigOverrides(
+              release.config.providerConfigOverrides,
+            ),
+          }),
     },
   };
 }

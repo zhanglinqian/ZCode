@@ -4,14 +4,22 @@ import { mkdir, readFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import {
   ModelConfigRules,
+  ProviderTemplate,
+  ProviderTemplateMap,
+  type ModelId,
+  type ProviderConfig,
   type ProviderConfigLayerSnapshot,
   type ProviderSource,
 } from "@zcode/provider";
 import { atomicWritePrivateTextFile, withFileLock } from "@zcode/shared/node";
 import {
   decodeZCodeBuiltinRelease,
+  encodeProviderConfigOverrides,
   encodeZCodeBuiltinRelease,
   serializeZCodeBuiltinRelease,
+  type ProviderConfigOverrides,
+  type ProviderTemplateConfigOverride,
+  type ZCodeBuiltinConfigContent,
   type ZCodeBuiltinRelease,
 } from "./zcode-builtin-release.js";
 
@@ -59,9 +67,12 @@ export class NodeZCodeBuiltinProviderConfigSource implements ProviderSource<Prov
     } catch {
       // Active 只是可丢弃缓存，目录锁、监听或原子物化失败不能阻断
       // Bundled 基线。缓存边界不可用时绕过 Active；Bundled 自身无效仍会在这里抛错。
-      release = selectReleaseCandidate(
-        await readBundledReleaseCandidate(this.#bundledFilePath),
-        null,
+      const bundled = await readBundledReleaseCandidate(this.#bundledFilePath);
+      // 与 #readAndMaterializeLocked 同一不变量：绕过 Active 不等于丢弃专项层，
+      // 否则这个分支交出的快照会让 worker 丢思考强度档位与模板里声明的模型。
+      release = withPackageOverrides(
+        selectReleaseCandidate(bundled, null),
+        bundled.release?.config ?? {},
       );
     }
     this.#observedSignature ??= signatureOf(release);
@@ -75,8 +86,8 @@ export class NodeZCodeBuiltinProviderConfigSource implements ProviderSource<Prov
       this.#assertNotDisposed();
       const current = await this.#readAndMaterializeLocked();
       this.#assertNotDisposed();
-      // CDN 版本号只决定官方层；远端不能擦除或替换当前安装包声明的专项模型规则。
-      release = withModelOverrides(release, current.config.modelConfigOverrides);
+      // CDN 版本号只决定官方层；远端不能擦除或替换当前安装包声明的两层专项配置。
+      release = withPackageOverrides(release, current.config);
       if (release.revision < current.revision) return "stale" as const;
       if (release.revision === current.revision) {
         if (serializeZCodeBuiltinRelease(release) === serializeZCodeBuiltinRelease(current)) {
@@ -113,9 +124,15 @@ export class NodeZCodeBuiltinProviderConfigSource implements ProviderSource<Prov
         ? Promise.resolve(null)
         : readReleaseCandidate(this.#activeFilePath),
     ]);
-    const selected = withModelOverrides(
-      selectReleaseCandidate(bundled, active),
-      bundled?.release?.config.modelConfigOverrides,
+    const candidate = selectReleaseCandidate(bundled, active);
+    // Bug 原因：Bundled 文件读不到时专项层参数为 undefined，会把 Active 已存的专项层
+    // 整块擦掉并降级改写 Active，worker（以 Active 为唯一配置源）随之丢思考强度档位与
+    // 模板里声明的模型。区分两种情况：Bundled 可读时仍是权威来源——旧包不带专项层
+    // 是刻意声明，不能继承前一安装包的覆盖；仅当 Bundled 不可读时回退选中 release
+    // 自带的专项层（即 Active 物化内容）兜底。
+    const selected = withPackageOverrides(
+      candidate,
+      bundled?.release ? bundled.release.config : candidate.config,
     );
     if (this.#activeFilePath !== this.#bundledFilePath) {
       const activeSignature = active?.release ? signatureOf(active.release) : null;
@@ -246,26 +263,93 @@ function snapshotFromRelease(
   release: ZCodeBuiltinRelease,
   sourceKey: string,
 ): ProviderConfigLayerSnapshot {
-  const overrides = release.config.modelConfigOverrides;
-  const overrideKey = overrides
-    ? `:${createHash("sha256").update(JSON.stringify(overrides.toZCodeBuiltinJSON())).digest("hex")}`
-    : "";
+  const { modelConfigOverrides, providerConfigOverrides } = release.config;
+  const overrideKey =
+    modelConfigOverrides || providerConfigOverrides
+      ? `:${createHash("sha256")
+          .update(
+            JSON.stringify([
+              modelConfigOverrides ? modelConfigOverrides.toZCodeBuiltinJSON() : null,
+              providerConfigOverrides
+                ? encodeProviderConfigOverrides(providerConfigOverrides)
+                : null,
+            ]),
+          )
+          .digest("hex")}`
+      : "";
   return Object.freeze({
     revision: `zcode-builtin:${release.revision}:${sourceKey}${overrideKey}`,
     providers: release.config.providers,
-    providerTemplates: release.config.providerTemplates,
+    // 模板专项层同样在构建快照时应用：Active 里的官方列表保持官方原样，
+    // 换回不带专项层的包时声明自然消失。
+    providerTemplates: applyProviderTemplateOverrides(
+      release.config.providerTemplates,
+      providerConfigOverrides,
+    ),
     // 专项层必须在模板规则之后、Personal 之前应用；不能塞回 modelRules 组内被模板反向覆盖。
-    models: overrides
-      ? new ModelConfigRules([...release.config.modelConfigRules.rules(), ...overrides.rules()])
+    models: modelConfigOverrides
+      ? new ModelConfigRules([
+          ...release.config.modelConfigRules.rules(),
+          ...modelConfigOverrides.rules(),
+        ])
       : release.config.modelConfigRules,
   });
 }
 
-function withModelOverrides(
+function applyProviderTemplateOverrides(
+  templates: ProviderTemplateMap,
+  overrides: ProviderConfigOverrides | undefined,
+): ProviderTemplateMap {
+  if (!overrides || overrides.templateRules.length === 0) return templates;
+  const rulesByTemplate = new Map(overrides.templateRules.map((rule) => [rule.templateId, rule]));
+  let changed = false;
+  const entries = templates.entries().map((entry) => {
+    const rule = rulesByTemplate.get(entry[0]);
+    if (!rule) return entry;
+    changed = true;
+    return [
+      entry[0],
+      new ProviderTemplate({
+        templateId: entry[1].templateId,
+        templateNameMap: entry[1].templateNameMap,
+        config: insertTemplateModelIds(entry[1].config, rule),
+      }),
+    ] as const;
+  });
+  return changed ? new ProviderTemplateMap(entries) : templates;
+}
+
+/** 只插入官方列表里没有的 ID，重复应用是幂等的；声明了 modelOrder 的模板同步插入，保持顺序一致。 */
+function insertTemplateModelIds(
+  config: ProviderConfig,
+  rule: ProviderTemplateConfigOverride,
+): ProviderConfig {
+  const incoming = rule.builtinModelIds.filter(
+    (modelId) => !config.builtinModelIds?.includes(modelId),
+  );
+  if (incoming.length === 0) return config;
+  const merge = (existing: readonly ModelId[]): readonly ModelId[] =>
+    rule.at === "start"
+      ? [...incoming, ...existing.filter((modelId) => !incoming.includes(modelId))]
+      : [...existing.filter((modelId) => !incoming.includes(modelId)), ...incoming];
+  let next = config.withBuiltinModelIds(
+    config.builtinModelIds ? merge(config.builtinModelIds) : incoming,
+  );
+  return config.modelOrder ? next.withModelOrder(merge(config.modelOrder)) : next;
+}
+
+function withPackageOverrides(
   release: ZCodeBuiltinRelease,
-  overrides: ModelConfigRules | undefined,
+  source: Pick<ZCodeBuiltinConfigContent, "modelConfigOverrides" | "providerConfigOverrides">,
 ): ZCodeBuiltinRelease {
-  return { ...release, config: { ...release.config, modelConfigOverrides: overrides } };
+  return {
+    ...release,
+    config: {
+      ...release.config,
+      modelConfigOverrides: source.modelConfigOverrides,
+      providerConfigOverrides: source.providerConfigOverrides,
+    },
+  };
 }
 
 function signatureOf(release: ZCodeBuiltinRelease): string {
