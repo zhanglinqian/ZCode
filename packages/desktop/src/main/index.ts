@@ -11,6 +11,7 @@ import {
 import { createRemoteConversationTelemetryDispatcher } from "@zcode/shared/conversation-telemetry";
 import { installRequestSecurityDiagnostics } from "./request-security-edition/index.js";
 import { createLocalTtftExporter } from "./localTtftExporter.js";
+import { createOfficialDataImport } from "./official-data-import/index.js";
 /* eslint-disable max-lines */
 import "./desktopEarlyDataBaseDirBootstrap.js";
 import "./desktopEarlyChromiumHardwareAccelerationBootstrap.js";
@@ -89,6 +90,7 @@ import {
   type AppSettings,
   type appSettingsPatchSchema,
   PlatformChannels,
+  DesktopCommandIds,
   ZCODE_ENV,
   ZCODE_PRODUCT_FLAVOR,
   ZCODE_AUTO_UPDATE_ENABLED,
@@ -304,7 +306,11 @@ import {
   WINDOWS_UPDATE_LOCK_RELEASE_GRACE_MS,
 } from "./windowsInstallResourceLocks.js";
 import { mainMemoryDiagnosticsRegistry } from "./mainMemoryDiagnostics.js";
-import { resolveZCodeDataRootPath } from "@zcode/shared/node";
+import {
+  resolveDefaultDataBaseDir,
+  resolveZCodeDataRootDir,
+  resolveZCodeDataRootPath,
+} from "@zcode/shared/node";
 import {
   PLUGIN_SANDBOX_PRIVILEGED_SCHEME,
   getPluginSandboxHost,
@@ -337,7 +343,8 @@ const fallbackEnabled = enablePrivateFileKeyFallback({
     }),
   onReset: ({ status, ...event }) => {
     const detail = { ...event, platform: process.platform };
-    if (status === "reset") logger.info("[credential] 凭据密钥不可用，已备份并重置凭据存储", detail);
+    if (status === "reset")
+      logger.info("[credential] 凭据密钥不可用，已备份并重置凭据存储", detail);
     else if (status === "failed") logger.warn("[credential] 凭据存储自动重置失败", detail);
     else logger.info("[credential] 凭据存储自动重置已放弃（锁内复核不再满足）", detail);
   },
@@ -1753,10 +1760,60 @@ function confirmAppQuit(originWindow?: BrowserWindow | null) {
   return result === 0;
 }
 
+const officialImportTarget = join(
+  resolveDefaultDataBaseDir(process.env.HOME?.trim() || homedir()),
+  ".zcode",
+);
+const officialDataImport = createOfficialDataImport(
+  join(homedir(), ".zcode"),
+  officialImportTarget,
+);
+
 async function executeDesktopCommandForApp(
   command: Parameters<typeof executeDesktopCommand>[0]["command"],
   senderWindow?: BrowserWindow | null,
 ) {
+  if (
+    command === DesktopCommandIds.OfficialDataImportStatus ||
+    command === DesktopCommandIds.ImportOfficialData ||
+    command === DesktopCommandIds.RestoreOfficialDataBackup
+  ) {
+    if (ZCODE_PRODUCT_FLAVOR !== "fenjue") return null;
+    const enabled =
+      resolveZCodeDataRootDir() === officialImportTarget &&
+      !(await mainSettingService.get()).dataBaseDir;
+    const status = await officialDataImport.status();
+    if (command === DesktopCommandIds.OfficialDataImportStatus) return { ...status, enabled };
+    if (!enabled) throw new Error("custom-import-target");
+    const restore = command === DesktopCommandIds.RestoreOfficialDataBackup;
+    const zh = toZhOrEnLocale(currentApplicationLocale) === "zh-CN";
+    const confirmation = await dialog.showMessageBox({
+      type: "warning",
+      buttons: zh ? ["取消", "确认并重启"] : ["Cancel", "Confirm and restart"],
+      defaultId: 0,
+      cancelId: 0,
+      message: restore
+        ? zh
+          ? "恢复迁移前的 Fen Jue 数据？"
+          : "Restore your pre-import Fen Jue data?"
+        : zh
+          ? "导入官方 ZCode 数据？"
+          : "Import official ZCode data?",
+      detail: restore
+        ? zh
+          ? "当前数据会另存一份备份。"
+          : "Your current data will be archived separately."
+        : zh
+          ? "请先退出官方 ZCode 并停止其 CLI。导入后将使用官方历史和配置，Fen Jue 现有数据保留为可恢复备份。某些账号需重新登录。"
+          : "Quit official ZCode and stop its CLI first. Official history and settings will replace the active data. The previous data will be recoverable. Some accounts require sign-in again.",
+    });
+    if (confirmation.response !== 1) return;
+    await officialDataImport.schedule(restore ? "restore" : "import");
+    await prepareAppQuit("official-data-import");
+    app.relaunch();
+    app.quit();
+    return;
+  }
   return executeDesktopCommand({
     fetchHelpConfig: readHelpConfig,
     command,
@@ -2323,6 +2380,40 @@ app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
 });
 
 app.whenReady().then(async () => {
+  if (gotTheLock && ZCODE_PRODUCT_FLAVOR === "fenjue") {
+    try {
+      const operation = await officialDataImport.run();
+      if (operation) {
+        const { skippedLinks } = await officialDataImport.status();
+        dialog.showMessageBoxSync({
+          type: "info",
+          message: operation === "import" ? "ZCode data imported." : "Fen Jue backup restored.",
+          detail:
+            operation === "import" && skippedLinks > 0
+              ? `Skipped broken links: ${skippedLinks}`
+              : undefined,
+        });
+      }
+    } catch (error) {
+      const diagnostic = error as NodeJS.ErrnoException;
+      const code =
+        diagnostic.code ??
+        (/^[a-z]+(?:-[a-z]+)+$/.test(diagnostic.message) ? diagnostic.message : "migration-failed");
+      logger.warn("[official-data-import] migration failed", {
+        code,
+      });
+      dialog.showMessageBoxSync({
+        type: "error",
+        message:
+          toZhOrEnLocale(currentApplicationLocale) === "zh-CN"
+            ? "数据迁移未完成，请保留现有数据并检查迁移日志。"
+            : "Data migration could not finish. Keep your existing data and check the migration log.",
+        detail: code,
+      });
+      app.exit(1);
+      return;
+    }
+  }
   markMainLaunchAppReady();
   installRequestSecurityDiagnostics(session.defaultSession.webRequest, logger);
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {

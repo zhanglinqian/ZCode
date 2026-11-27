@@ -2,7 +2,11 @@ import { watch, type FSWatcher } from "node:fs";
 import { createHash } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
-import type { ProviderConfigLayerSnapshot, ProviderSource } from "@zcode/provider";
+import {
+  ModelConfigRules,
+  type ProviderConfigLayerSnapshot,
+  type ProviderSource,
+} from "@zcode/provider";
 import { atomicWritePrivateTextFile, withFileLock } from "@zcode/shared/node";
 import {
   decodeZCodeBuiltinRelease,
@@ -71,6 +75,8 @@ export class NodeZCodeBuiltinProviderConfigSource implements ProviderSource<Prov
       this.#assertNotDisposed();
       const current = await this.#readAndMaterializeLocked();
       this.#assertNotDisposed();
+      // CDN 版本号只决定官方层；远端不能擦除或替换当前安装包声明的专项模型规则。
+      release = withModelOverrides(release, current.config.modelConfigOverrides);
       if (release.revision < current.revision) return "stale" as const;
       if (release.revision === current.revision) {
         if (serializeZCodeBuiltinRelease(release) === serializeZCodeBuiltinRelease(current)) {
@@ -107,7 +113,10 @@ export class NodeZCodeBuiltinProviderConfigSource implements ProviderSource<Prov
         ? Promise.resolve(null)
         : readReleaseCandidate(this.#activeFilePath),
     ]);
-    const selected = selectReleaseCandidate(bundled, active);
+    const selected = withModelOverrides(
+      selectReleaseCandidate(bundled, active),
+      bundled?.release?.config.modelConfigOverrides,
+    );
     if (this.#activeFilePath !== this.#bundledFilePath) {
       const activeSignature = active?.release ? signatureOf(active.release) : null;
       if (activeSignature !== signatureOf(selected)) await this.#writeActiveLocked(selected);
@@ -237,12 +246,26 @@ function snapshotFromRelease(
   release: ZCodeBuiltinRelease,
   sourceKey: string,
 ): ProviderConfigLayerSnapshot {
+  const overrides = release.config.modelConfigOverrides;
+  const overrideKey = overrides
+    ? `:${createHash("sha256").update(JSON.stringify(overrides.toZCodeBuiltinJSON())).digest("hex")}`
+    : "";
   return Object.freeze({
-    revision: `zcode-builtin:${release.revision}:${sourceKey}`,
+    revision: `zcode-builtin:${release.revision}:${sourceKey}${overrideKey}`,
     providers: release.config.providers,
     providerTemplates: release.config.providerTemplates,
-    models: release.config.modelConfigRules,
+    // 专项层必须在模板规则之后、Personal 之前应用；不能塞回 modelRules 组内被模板反向覆盖。
+    models: overrides
+      ? new ModelConfigRules([...release.config.modelConfigRules.rules(), ...overrides.rules()])
+      : release.config.modelConfigRules,
   });
+}
+
+function withModelOverrides(
+  release: ZCodeBuiltinRelease,
+  overrides: ModelConfigRules | undefined,
+): ZCodeBuiltinRelease {
+  return { ...release, config: { ...release.config, modelConfigOverrides: overrides } };
 }
 
 function signatureOf(release: ZCodeBuiltinRelease): string {

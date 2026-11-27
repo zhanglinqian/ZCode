@@ -8,5 +8,26 @@
     "editor.defaultFormatter": "oxc.oxc-vscode",
     "editor.formatOnSave": true
   },
-  "cmake.sourceDirectory": "${workspaceFolder}/scripts/native-search-tools-windows"
+  "cmake.sourceDirectory": "${workspaceFolder}/scripts/native-search-tools-windows",
+  "workbench.colorCustomizations": {
+    "activityBar.background": "#15158E",
+    "titleBar.activeBackground": "#2020D5",
+    "titleBar.inactiveBackground": "#15158E",
+    "statusBar.background": "#15158E",
+    "statusBar.debuggingBackground": "#15158E",
+    "statusBar.noFolderBackground": "#15158E",
+    "activityBar.foreground": "#FFFFFF",
+    "activityBar.inactiveForeground": "#FFFFFF",
+    "titleBar.activeForeground": "#FFFFFF",
+    "titleBar.inactiveForeground": "#FFFFFF",
+    "statusBar.foreground": "#FFFFFF",
+    "statusBar.debuggingForeground": "#FFFFFF",
+    "statusBar.noFolderForeground": "#FFFFFF"
+  },
+  "files.associations": {
+    "*.cjson": "jsonc",
+    "*.wxss": "css",
+    "*.wxs": "javascript",
+    "*.wxml": "html"
+  }
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 44,
+  "revision": 45,
   "config": {
     "providerConfigRules": {
       "templateRules": [
@@ -641,6 +641,8 @@
               "baseUrl": "https://api.openai.com/v1"
             },
             "builtinModelIds": [
+              "gpt-6.2-astra",
+              "gpt-6.2-sol",
               "gpt-6-astra",
               "gpt-5.6-terra",
               "gpt-6.1-sol",
@@ -8491,6 +8493,247 @@
           }
         }
       ]
+    },
+    "modelConfigOverrides": {
+      "modelRules": [
+        {
+          "modelMatch": ".*gpt-5\\.6.*",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["none", "low", "medium", "high", "xhigh", "max"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gpt-5\\.3-codex.*",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["low", "medium", "high", "xhigh"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gpt-6-astra.*",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["low", "medium", "high", "xhigh", "max"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gpt-5\\.4.*",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["none", "low", "medium", "high", "xhigh"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gpt-5\\.4-pro.*",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["medium", "high", "xhigh"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gpt-5\\.4-mini.*",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["none", "low", "medium", "high", "xhigh"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*gpt-5\\.4-nano.*",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["none", "low", "medium", "high", "xhigh"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": "^(?:openai/)?gpt-6\\.2-(?:sol|astra)(?:-\\d{4}-\\d{2}-\\d{2})?$",
+          "config": {
+            "properties": {
+              "contextWindow": 1050000,
+              "inputFormat": {
+                "supportsImage": true,
+                "supportsVideo": false,
+                "supportsAudio": false,
+                "supportsPdf": true
+              },
+              "supportsJsonSchemaOutput": true
+            },
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["low", "medium", "high", "xhigh", "max"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": "^(?:openai/)?gpt-6\\.1-sol(?:-\\d{4}-\\d{2}-\\d{2})?$",
+          "config": {
+            "properties": {
+              "contextWindow": 1050000,
+              "inputFormat": {
+                "supportsImage": true,
+                "supportsVideo": false,
+                "supportsAudio": false,
+                "supportsPdf": true
+              },
+              "supportsJsonSchemaOutput": true
+            },
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["low", "medium", "high", "xhigh", "max"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": "^(?:openai/)?gpt-(?:6\\.1-terra|6-(?:sol|luna))(?:-\\d{4}-\\d{2}-\\d{2})?$",
+          "config": {
+            "properties": {
+              "contextWindow": 1050000,
+              "inputFormat": {
+                "supportsImage": true,
+                "supportsVideo": false,
+                "supportsAudio": false,
+                "supportsPdf": true
+              },
+              "supportsJsonSchemaOutput": true
+            },
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["none", "low", "medium", "high", "xhigh", "max"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": "^(?:openai/)?gpt-5\\.5(?:-\\d{4}-\\d{2}-\\d{2})?$",
+          "config": {
+            "properties": {
+              "contextWindow": 1050000,
+              "inputFormat": {
+                "supportsImage": true,
+                "supportsVideo": false,
+                "supportsAudio": false,
+                "supportsPdf": true
+              },
+              "supportsJsonSchemaOutput": true
+            },
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["none", "low", "medium", "high", "xhigh"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": "^(?:openai/)?gpt-5\\.2(?:-\\d{4}-\\d{2}-\\d{2})?$",
+          "config": {
+            "properties": {
+              "contextWindow": 400000,
+              "inputFormat": {
+                "supportsImage": true,
+                "supportsVideo": false,
+                "supportsAudio": false,
+                "supportsPdf": true
+              },
+              "supportsJsonSchemaOutput": true
+            },
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["none", "low", "medium", "high", "xhigh"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": "^(?:openai/)?gpt-5\\.1(?:-\\d{4}-\\d{2}-\\d{2})?$",
+          "config": {
+            "properties": {
+              "contextWindow": 400000,
+              "inputFormat": {
+                "supportsImage": true,
+                "supportsVideo": false,
+                "supportsAudio": false,
+                "supportsPdf": true
+              },
+              "supportsJsonSchemaOutput": true
+            },
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["none", "low", "medium", "high"]
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": "^(?:openai/)?gpt-5(?:-(?:mini|nano))?(?:-\\d{4}-\\d{2}-\\d{2})?$",
+          "config": {
+            "properties": {
+              "contextWindow": 400000,
+              "inputFormat": {
+                "supportsImage": true,
+                "supportsVideo": false,
+                "supportsAudio": false,
+                "supportsPdf": true
+              },
+              "supportsJsonSchemaOutput": true
+            },
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["minimal", "low", "medium", "high"]
+              }
+            }
+          }
+        }
+      ],
+      "modelApiRules": [
+        {
+          "modelMatch": "^(?:(?:openai/)?gpt-(?:5\\.(?:3-codex|4(?:-(?:pro|mini|nano))?|6(?:-(?:sol|terra|luna))?)|6-astra)(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-6\\.2-(?:sol|astra)(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-6\\.1-sol(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-(?:6\\.1-terra|6-(?:sol|luna))(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-5\\.5(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-5\\.2(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-5\\.1(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-5(?:-(?:mini|nano))?(?:-\\d{4}-\\d{2}-\\d{2})?)$",
+          "apiTypeMatch": "openai-chat-completions",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "map": "{\"reasoning_effort\": reasoningLevel}"
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": "^(?:(?:openai/)?gpt-(?:5\\.(?:3-codex|4(?:-(?:pro|mini|nano))?|6(?:-(?:sol|terra|luna))?)|6-astra)(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-6\\.2-(?:sol|astra)(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-6\\.1-sol(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-(?:6\\.1-terra|6-(?:sol|luna))(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-5\\.5(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-5\\.2(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-5\\.1(?:-\\d{4}-\\d{2}-\\d{2})?|(?:openai/)?gpt-5(?:-(?:mini|nano))?(?:-\\d{4}-\\d{2}-\\d{2})?)$",
+          "apiTypeMatch": "openai-responses",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "map": "{\"reasoning\": {\"effort\": reasoningLevel}}"
+              }
+            }
+          }
+        }
+      ],
+      "providerSiteRules": [],
+      "templateModelRules": [],
+      "builtinProviderModelRules": []
     }
   }
 }

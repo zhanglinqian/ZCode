@@ -1,6 +1,9 @@
 import type { CreateAiSdkModelOptions } from "@zcode/adapters/model";
 import type { Model } from "@zcode/contracts";
 import { fileURLToPath } from "node:url";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   ApiKeyAccessConfig,
   ModelConfigRules,
@@ -13,6 +16,7 @@ import {
 } from "@zcode/provider";
 import {
   NodeZCodeBuiltinProviderConfigSource,
+  decodeZCodeBuiltinRelease,
   type ZCodeBuiltinProviderConfigSnapshot,
 } from "@zcode/provider-node";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -26,6 +30,104 @@ const source = new NodeZCodeBuiltinProviderConfigSource({
   watch: false,
 });
 let zcodeBuiltin: ZCodeBuiltinProviderConfigSnapshot;
+
+describe("Bundled GPT overrides survive newer remote releases", () => {
+  it("materializes, refreshes and reopens the same effective rules for Host and Worker", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "fenjue-gpt-release-"));
+    const activeFilePath = join(directory, "active.json");
+    const bundled = JSON.parse(await readFile(zcodeBuiltinProviderConfigFilePath, "utf8"));
+    const remote = structuredClone(bundled);
+    delete remote.config.modelConfigOverrides;
+    remote.revision = 48;
+    remote.config.modelConfigRules.templateModelRules.push({
+      templateId: "fixture",
+      modelId: "gpt-6.2-sol",
+      config: { optionSpecs: { reasoningLevel: { values: ["disabled", "enabled"], map: "{}" } } },
+    });
+    await writeFile(activeFilePath, JSON.stringify(remote));
+    const host = new NodeZCodeBuiltinProviderConfigSource({
+      bundledFilePath: zcodeBuiltinProviderConfigFilePath,
+      activeFilePath,
+      watch: false,
+    });
+    const resolveGpt = (snapshot: ZCodeBuiltinProviderConfigSnapshot) =>
+      snapshot.models
+        .resolve({
+          providerId: "isolated",
+          templateId: "fixture",
+          modelId: "gpt-6.2-sol",
+          apiType: "openai-responses",
+        })
+        .toJSON().optionSpecs?.reasoningLevel;
+    try {
+      const first = await host.read();
+      expect(resolveGpt(first)).toEqual({
+        values: ["low", "medium", "high", "xhigh", "max"],
+        map: '{"reasoning": {"effort": reasoningLevel}}',
+      });
+      for (const revision of [49, 50]) {
+        remote.revision = revision;
+        remote.config.modelConfigRules.modelRules.push({
+          modelMatch: "^unrelated-model$",
+          config: { properties: { contextWindow: revision * 1000 } },
+        });
+        // 恶意/陈旧远端同名字段不能取得包内专项层的所有权。
+        remote.config.modelConfigOverrides = {
+          modelRules: [],
+          modelApiRules: [],
+          providerSiteRules: [],
+          templateModelRules: [],
+          builtinProviderModelRules: [],
+        };
+        const decoded = decodeZCodeBuiltinRelease(remote);
+        expect(await host.applyRemoteRelease(decoded)).toBe("updated");
+        expect(await host.applyRemoteRelease(decoded)).toBe("unchanged");
+        const refreshed = await host.read();
+        expect(resolveGpt(refreshed)).toEqual(resolveGpt(first));
+        expect(
+          refreshed.models.resolve({ providerId: "isolated", modelId: "unrelated-model" }).toJSON()
+            .properties?.contextWindow,
+        ).toBe(revision * 1000);
+      }
+      const materialized = await readFile(activeFilePath, "utf8");
+      const worker = new NodeZCodeBuiltinProviderConfigSource({
+        bundledFilePath: activeFilePath,
+        watch: false,
+      });
+      const restartedHost = new NodeZCodeBuiltinProviderConfigSource({
+        bundledFilePath: zcodeBuiltinProviderConfigFilePath,
+        activeFilePath,
+        watch: false,
+      });
+      try {
+        expect(resolveGpt(await worker.read())).toEqual(resolveGpt(first));
+        expect(resolveGpt(await restartedHost.read())).toEqual(resolveGpt(first));
+        expect(await readFile(activeFilePath, "utf8")).toBe(materialized);
+      } finally {
+        worker.dispose();
+        restartedHost.dispose();
+      }
+      // 不带专项层的旧包仍保持官方最新版选择语义，不继承前一安装包的覆盖。
+      const plainBundle = join(directory, "plain.json");
+      delete remote.config.modelConfigOverrides;
+      remote.revision = 45;
+      await writeFile(plainBundle, JSON.stringify(remote));
+      const plain = new NodeZCodeBuiltinProviderConfigSource({
+        bundledFilePath: plainBundle,
+        activeFilePath,
+        watch: false,
+      });
+      try {
+        expect(resolveGpt(await plain.read())?.values).toEqual(["disabled", "enabled"]);
+      } finally {
+        plain.dispose();
+      }
+    } finally {
+      host.dispose();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
 
 beforeAll(async () => {
   zcodeBuiltin = await source.read();

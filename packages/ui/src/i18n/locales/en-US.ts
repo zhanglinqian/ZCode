@@ -3522,6 +3522,15 @@ const enUS: Record<string, string> = {
   "settings.source.retiredProfilesDescription":
     "Archived after the connection target identity changed; kept for records",
   "settings.source.empty": "No remote device connections yet.",
+  "settings.officialImport.customRoot": "Official data import requires the default Fen Jue data directory.",
+  "settings.officialImport.failed": "Could not schedule migration. Check the data directory and try again.",
+  "settings.officialImport.import": "Import data from official ZCode",
+  "settings.officialImport.restore": "Restore Fen Jue backup",
+  "settings.shortcuts.sendPreset": "Send shortcut",
+  "settings.shortcuts.sendPresetDescription": "Choose whether Enter sends a message or inserts a new line.",
+  "settings.shortcuts.sendPresetEnter": "Press Enter to send",
+  "settings.shortcuts.sendPresetModifier": "Always press {shortcut} to send",
+  "settings.shortcuts.sendPresetCustom": "Custom",
   "settings.source.migrationCountsRequireConnection":
     "Connect this device to inspect its migration counts.",
   "settings.source.migrationReport": "Migration report",

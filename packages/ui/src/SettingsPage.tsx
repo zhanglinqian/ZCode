@@ -40,6 +40,7 @@ import { toast } from "@/components/ui/toast.js";
 import { DesktopWindowFrame } from "@/DesktopWindowFrame.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
+import { useOfficialDataImport } from "@/official-data-import/index.js";
 import { logger } from "@/logger.js";
 import { getPathLeaf } from "@/lib/path.js";
 import { useProviderSettingsView } from "@/hooks/useProviderSettingsView.js";
@@ -370,6 +371,7 @@ export function SettingsPage({
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   const usesInlineWindowControls = Boolean(isWindowsDesktop || isLinuxDesktop);
   const platform = usePlatform();
+  const officialDataImport = useOfficialDataImport(Boolean(isDesktop));
   const remoteWorkspaceController = useOptionalRemoteWorkspaceController();
   const [activeSection, setActiveSection] = useState<SettingsSectionId>(() => {
     const initialSection = consumeInitialSettingsSection("general");
@@ -2029,12 +2031,57 @@ export function SettingsPage({
                             />
                           ) : activeSection === "dataSync" ? (
                             isDesktop ? (
-                              <DataSyncSection
-                                snapshot={sourceManagementSnapshot}
-                                deviceSyncStateService={localHostServices.deviceSyncStateService}
-                                onOpenRemoteConnection={onOpenRemoteWorkspace}
-                                onOpenMigration={requestMigrationDialog}
-                              />
+                              <>
+                                <DataSyncSection
+                                  snapshot={sourceManagementSnapshot}
+                                  deviceSyncStateService={localHostServices.deviceSyncStateService}
+                                  onOpenRemoteConnection={onOpenRemoteWorkspace}
+                                  onOpenMigration={requestMigrationDialog}
+                                />
+                                {officialDataImport.status ? (
+                                  <div className="space-y-2">
+                                    <p className="text-ui-sm" role="status">
+                                      {!officialDataImport.status.enabled
+                                        ? intl.formatMessage({
+                                            id: "settings.officialImport.customRoot",
+                                          })
+                                        : officialDataImport.failed
+                                          ? intl.formatMessage({
+                                              id: "settings.officialImport.failed",
+                                            })
+                                          : null}
+                                    </p>
+                                    <Button
+                                      variant="outline"
+                                      disabled={
+                                        !officialDataImport.status.enabled ||
+                                        !officialDataImport.status.sourceAvailable ||
+                                        officialDataImport.status.backupAvailable ||
+                                        officialDataImport.busy
+                                      }
+                                      onClick={() => void officialDataImport.execute(false)}
+                                    >
+                                      {intl.formatMessage({
+                                        id: "settings.officialImport.import",
+                                      })}
+                                    </Button>
+                                    {officialDataImport.status.backupAvailable ? (
+                                      <Button
+                                        variant="outline"
+                                        disabled={
+                                          !officialDataImport.status.enabled ||
+                                          officialDataImport.busy
+                                        }
+                                        onClick={() => void officialDataImport.execute(true)}
+                                      >
+                                        {intl.formatMessage({
+                                          id: "settings.officialImport.restore",
+                                        })}
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </>
                             ) : null
                           ) : activeSection === "remoteDevices" ? (
                             sharedSettings && isDesktop && sourceManagement ? (

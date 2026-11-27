@@ -1,6 +1,29 @@
 # 快捷键设置（Shortcut Settings）Spec
 
-快捷键设置提供用户级的应用命令绑定。首期覆盖新建任务、打开工作区、关闭当前上下文、侧栏/面板/终端切换、任务查找、会话前后导航、历史前进后退、命令中心和页面缩放。Enter、Escape、Tab、Space 保持组件固定交互。配置按命令 ID 保存，缺失或非法值回退默认值；同一组合键只能绑定一个命令。
+## 发送快捷键预设（2026-11-27）
+
+设置 → 键盘快捷键顶部提供「发送快捷键」下拉选择，复用 shortcutBindings 的 composerSend 与 composerInsertNewline 两项作为唯一持久状态。
+
+- 「按 Enter 发送」使用 Enter 发送、Shift+Enter 换行。
+- 「始终按 Ctrl+Enter 发送」（macOS 展示 ⌘+Enter）使用 CmdOrCtrl+Enter 发送，Enter 和 Shift+Enter 换行。
+- 现有自定义组合显示「自定义」，仍可在下方逐条改绑。选择预设只替换这两个命令的绑定，其他命令保持其保存值。与其他命令冲突时提示占用者，并保留原配置。
+- 保存立即影响所有会话输入框，重启后沿用。IME、发送禁用与手机软键盘门禁沿用输入框既有规则。
+
+```mermaid
+sequenceDiagram
+  participant U as 快捷键设置
+  participant S as settingService
+  participant K as shortcuts 生效表
+  participant C as Lexical 输入框
+  U->>S: 更新两个 composer 命令的 shortcutBindings
+  S->>K: 广播权威设置
+  K->>C: 提供生效发送与换行绑定
+  C->>C: 键盘匹配并执行现有发送或换行
+```
+
+浏览器验收先维护以下场景。选择 Ctrl/⌘+Enter 后，输入文本并按 Enter 只换行，组合键发送一次；切回 Enter 后 Enter 发送、Shift+Enter 换行；刷新后预设保持；自定义绑定、冲突、保存失败不丢失原配置；组合输入中的 Enter 不发送。使用隔离页面和模拟设置服务验证，发送回调只记次数。
+
+快捷键设置提供用户级的应用命令绑定，覆盖新建任务、打开工作区、关闭当前上下文、侧栏/面板/终端切换、任务查找、会话前后导航、历史前进后退、命令中心、页面缩放和会话输入框发送与换行。会话输入框在 composer 作用域匹配配置，其他组件的 Enter、Escape、Tab、Space 保持组件固定交互。配置按命令 ID 保存，缺失或非法值回退默认值；同一组合键只能绑定一个命令。
 
 本 spec 是该功能的唯一实现依据；架构原则是**全仓库只有快捷键模块认识键位，其余代码只认命令 ID**。
 
@@ -16,7 +39,7 @@
 非目标：
 
 - 系统级全局快捷键（应用未聚焦时响应，Electron `globalShortcut`）：保持现状不引入，留作后续扩展。
-- 会话内输入框的组件级交互键（Enter 发送、Escape 取消、Tab 缩进、TaskSearchDialog 的 G/数字导航、GitActionMenu 的 ⏎）不做配置。
+- Escape 取消、Tab 缩进、TaskSearchDialog 的 G/数字导航、GitActionMenu 的 ⏎ 等组件级交互键保持固定。
 - 快捷键按 workspace 隔离：用户级全局配置，不分 workspace。
 
 ## 2. 架构与依赖方向

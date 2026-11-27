@@ -1605,6 +1605,27 @@ modules:
       contract: contract.ts
       ui: .
     owner: conversation
+  - id: desktop-official-data-import
+    roots:
+      - packages/desktop/src/main/official-data-import
+    managed: true
+    publicEntrypoints:
+      - packages/desktop/src/main/official-data-import/index.ts
+      - packages/desktop/src/main/official-data-import/contract.ts
+    layers:
+      adapters: .
+    owner: desktop
+  - id: settings-official-data-import
+    roots:
+      - packages/ui/src/official-data-import
+    managed: true
+    requires: [shared, ui]
+    publicEntrypoints:
+      - packages/ui/src/official-data-import/index.ts
+      - packages/ui/src/official-data-import/contract.ts
+    layers:
+      ui: .
+    owner: settings
   # desktop-microphone-access：由 architecture:adopt 登记
   - id: desktop-microphone-access
     roots:

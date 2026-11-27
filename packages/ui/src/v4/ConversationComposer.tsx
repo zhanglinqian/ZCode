@@ -1,4 +1,5 @@
 import { ComposerStatusRow } from "@/v4/ConversationStatusPanel.js";
+import { useShortcutCommandLabel } from "@/shortcuts/useShortcutBindings.js";
 import type { SessionLifecycleSnapshot } from "@zcode/shared";
 import {
   WorkspaceHookPendingIndicator,
@@ -134,7 +135,6 @@ import {
 } from "@/lib/chatAttachments.js";
 import { resolveChatPlaceholderKey } from "@/lib/chatPlaceholder.js";
 import {
-  resolveChatEnterShortcut,
   resolveChatEnterSubmits,
   shouldAvoidIosInputFocusZoom,
   useIsMobileTextInputViewport,
@@ -814,7 +814,9 @@ function ConversationComposerImpl({
   // Bugfix：手机远控把完整能力说明放进绝对定位 placeholder 后，三行英文会越过
   // 40px 编辑区并覆盖工具栏。手机端改用短文案并限制两行；桌面端继续保留完整提示。
   const compactMobilePlaceholder = isWebRemoteControl && isMobileTextInputViewport;
-  const sendShortcut = resolveChatEnterShortcut({ enterSubmits });
+  // 发送键改绑后，提示也从权威键位表读取，避免仍显示固定的 Enter。
+  const configuredSendShortcut = useShortcutCommandLabel("composerSend");
+  const sendShortcut = enterSubmits ? configuredSendShortcut || undefined : undefined;
   const updateText = useCallback(
     (next: string) => {
       textRef.current = next;

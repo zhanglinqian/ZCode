@@ -12,6 +12,30 @@ export interface ComposerEffectiveBindings {
   readonly composerInsertNewline: readonly string[];
 }
 
+export const COMPOSER_SEND_PRESETS = {
+  enter: { composerSend: ["Enter"], composerInsertNewline: ["Shift+Enter"] },
+  modifier: { composerSend: ["CmdOrCtrl+Enter"], composerInsertNewline: ["Enter", "Shift+Enter"] },
+} as const satisfies Record<string, ComposerEffectiveBindings>;
+
+export function resolveComposerSendPreset(
+  effective: ComposerEffectiveBindings,
+): "enter" | "modifier" | "custom" {
+  for (const preset of ["enter", "modifier"] as const) {
+    const expected = COMPOSER_SEND_PRESETS[preset];
+    if (
+      ["composerSend", "composerInsertNewline"].every((command) => {
+        const key = command as keyof ComposerEffectiveBindings;
+        return (
+          effective[key].length === expected[key].length &&
+          expected[key].every((binding) => effective[key].includes(binding))
+        );
+      })
+    )
+      return preset;
+  }
+  return "custom";
+}
+
 /** Enter 族事件在 composer 内的最终动作。 */
 export type ComposerKeyAction = "send" | "newline";
 

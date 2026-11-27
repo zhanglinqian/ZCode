@@ -6,6 +6,14 @@ import {
   type ShortcutCommandId,
 } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.js";
+import { COMPOSER_SEND_PRESETS, resolveComposerSendPreset } from "@/shortcuts/composerShortcuts.js";
 import { toast } from "@/components/ui/toast.js";
 import { useConfirmDialogStore } from "@/store/confirmDialogStore.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
@@ -223,9 +231,78 @@ export function ShortcutSettingsSection({ isDesktop = false }: { isDesktop?: boo
   });
 
   const recordingCommandId = recording?.commandId ?? null;
+  const sendPreset = resolveComposerSendPreset(effective);
+  const modifierLabel = formatShortcutBindingLabel(COMPOSER_SEND_PRESETS.modifier.composerSend[0]);
+
+  const selectSendPreset = (value: string) => {
+    if (value !== "enter" && value !== "modifier") return;
+    const preset = COMPOSER_SEND_PRESETS[value];
+    const next = {
+      ...overrides,
+      composerSend: [...preset.composerSend],
+      composerInsertNewline: [...preset.composerInsertNewline],
+    };
+    for (const command of ["composerSend", "composerInsertNewline"] as const) {
+      for (const binding of next[command]) {
+        const conflict = checkShortcutBindingConflict(command, binding, next, {
+          menuChannelReserved: !isDesktop,
+        });
+        if (conflict?.kind === "occupied" && conflict.ownerCommandId) {
+          toast(
+            intl.formatMessage(
+              { id: "settings.shortcuts.clearConflict" },
+              {
+                command: commandLabel(conflict.ownerCommandId),
+              },
+            ),
+          );
+          return;
+        }
+      }
+    }
+    void persistBindings(next);
+  };
 
   return (
     <div className="min-w-0 space-y-6" aria-busy={saving} data-testid="settings-shortcuts-section">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-5">
+        <div className="space-y-1">
+          <label id="composer-send-preset-label" className="text-ui-base font-medium">
+            {intl.formatMessage({ id: "settings.shortcuts.sendPreset" })}
+          </label>
+          <p className="text-ui-sm text-foreground-subtle">
+            {intl.formatMessage({ id: "settings.shortcuts.sendPresetDescription" })}
+          </p>
+        </div>
+        <Select
+          value={sendPreset}
+          onValueChange={selectSendPreset}
+          disabled={saving || !settings || keyboardExclusive}
+        >
+          <SelectTrigger
+            aria-labelledby="composer-send-preset-label"
+            data-testid="settings-send-preset"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="enter">
+              {intl.formatMessage({ id: "settings.shortcuts.sendPresetEnter" })}
+            </SelectItem>
+            <SelectItem value="modifier">
+              {intl.formatMessage(
+                { id: "settings.shortcuts.sendPresetModifier" },
+                { shortcut: modifierLabel },
+              )}
+            </SelectItem>
+            {sendPreset === "custom" ? (
+              <SelectItem value="custom" disabled>
+                {intl.formatMessage({ id: "settings.shortcuts.sendPresetCustom" })}
+              </SelectItem>
+            ) : null}
+          </SelectContent>
+        </Select>
+      </div>
       <ShortcutSearchBar
         query={query}
         onQueryChange={setQuery}

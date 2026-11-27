@@ -1,6 +1,99 @@
 import { describe, expect, it, vi } from "vitest";
 import { compileModelOptionMaps } from "@zcode/model-option-map";
+import { readFile } from "node:fs/promises";
+import { ModelConfig, ModelConfigRules, parseZCodeBuiltinModelConfigRules } from "@zcode/provider";
 import { createModelOptionMapFetch } from "../src/model/model-option-map-fetch.js";
+
+async function loadBundledRules() {
+  const release = JSON.parse(
+    await readFile(
+      new URL("../../../../../config/provider/zcode-builtin.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  return new ModelConfigRules([
+    ...parseZCodeBuiltinModelConfigRules(release.config.modelConfigRules).rules(),
+    ...parseZCodeBuiltinModelConfigRules(release.config.modelConfigOverrides).rules(),
+  ]);
+}
+
+describe("bundled GPT reasoning reaches the final wire body", () => {
+  it("preserves personal overrides, protocol ownership and unknown-model fallback", async () => {
+    const rules = await loadBundledRules();
+    const input = { providerId: "isolated", modelId: "gpt-6.2-sol", apiType: "openai-responses" };
+    const personal = ModelConfigRules.empty().setExact(
+      input.providerId,
+      input.modelId,
+      ModelConfig.fromData({ optionSpecs: { reasoningLevel: { values: ["custom"], map: "{}" } } }),
+    );
+    const effective = ModelConfigRules.composeEffective(rules, personal).resolve(input).toJSON();
+    expect(effective.optionSpecs?.reasoningLevel).toEqual({ values: ["custom"], map: "{}" });
+    for (const modelId of ["gpt-6.3-sol", "gpt-6.2-sol-unknown", "not-gpt-6.2-sol"]) {
+      expect(
+        rules.resolve({ ...input, modelId }).toJSON().optionSpecs?.reasoningLevel?.values,
+      ).toEqual(["disabled", "enabled"]);
+    }
+    const anthropic = rules.resolve({ ...input, apiType: "anthropic-messages" }).toJSON();
+    expect(anthropic.optionSpecs?.reasoningLevel?.map).toContain("output_config");
+    expect(anthropic.optionSpecs?.reasoningLevel?.map).not.toContain("reasoning_effort");
+    for (const templateId of [undefined, "openai"]) {
+      expect(
+        rules.resolve({ ...input, templateId }).toJSON().optionSpecs?.reasoningLevel?.values,
+      ).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    }
+  });
+  const cases = [
+    ["gpt-6.2-sol", ["low", "medium", "high", "xhigh", "max"]],
+    ["openai/GPT-6.2-ASTRA", ["low", "medium", "high", "xhigh", "max"]],
+    ["gpt-6.1-sol", ["low", "medium", "high", "xhigh", "max"]],
+    ["gpt-6.1-terra", ["none", "low", "medium", "high", "xhigh", "max"]],
+    ["gpt-6-luna", ["none", "low", "medium", "high", "xhigh", "max"]],
+    ["gpt-6-sol", ["none", "low", "medium", "high", "xhigh", "max"]],
+    ["gpt-6-astra", ["low", "medium", "high", "xhigh", "max"]],
+    ["gpt-5.6-sol", ["none", "low", "medium", "high", "xhigh", "max"]],
+    ["gpt-5.5-2026-04-23", ["none", "low", "medium", "high", "xhigh"]],
+    ["gpt-5.4-pro", ["medium", "high", "xhigh"]],
+    ["gpt-5.4-mini", ["none", "low", "medium", "high", "xhigh"]],
+    ["gpt-5.3-codex", ["low", "medium", "high", "xhigh"]],
+    ["gpt-5.2", ["none", "low", "medium", "high", "xhigh"]],
+    ["gpt-5.1", ["none", "low", "medium", "high"]],
+    ["gpt-5-mini", ["minimal", "low", "medium", "high"]],
+  ] as const;
+
+  for (const apiType of ["openai-responses", "openai-chat-completions"] as const) {
+    it.each(cases)(`${apiType}: %s`, async (modelId, levels) => {
+      const rules = await loadBundledRules();
+      const config = rules.resolve({ providerId: "isolated", modelId, apiType }).toJSON();
+      expect(config.optionSpecs?.reasoningLevel?.values).toEqual(levels);
+      const specs = config.optionSpecs!;
+      const maps = compileModelOptionMaps({
+        reasoningLevel: { map: specs.reasoningLevel!.map! },
+        maxOutputTokens: { map: specs.maxOutputTokens!.map! },
+      });
+      for (const reasoningLevel of levels) {
+        let sent: unknown;
+        const fetch = createModelOptionMapFetch({
+          fetch: async (_input, init) => {
+            sent = JSON.parse(String(init?.body));
+            return new Response("{}");
+          },
+          maps,
+          values: { reasoningLevel, maxOutputTokens: 4096 },
+        });
+        // 通用兼容映射曾泄漏 thinking 等字段；捕获真正 transport 边界，而非只检查 JSON 文本。
+        await fetch("https://fixture.invalid", {
+          method: "POST",
+          body: JSON.stringify({ model: modelId }),
+        });
+        expect(sent).toEqual(
+          apiType === "openai-responses"
+            ? { model: modelId, reasoning: { effort: reasoningLevel }, max_output_tokens: 4096 }
+            : { model: modelId, reasoning_effort: reasoningLevel, max_completion_tokens: 4096 },
+        );
+      }
+    });
+  }
+});
 
 describe("createModelOptionMapFetch", () => {
   it.each([

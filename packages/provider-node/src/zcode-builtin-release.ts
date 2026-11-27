@@ -14,6 +14,8 @@ export interface ZCodeBuiltinConfigContent {
   readonly providers: ProviderConfigMap;
   readonly providerTemplates: ProviderTemplateMap;
   readonly modelConfigRules: ModelConfigRules;
+  /** 包内专项规则；Source 只信任当前 Bundled 提供的这一层。 */
+  readonly modelConfigOverrides?: ModelConfigRules;
 }
 
 export interface ZCodeBuiltinRelease {
@@ -30,6 +32,7 @@ const releaseSchema = z
       .object({
         providerConfigRules: z.unknown(),
         modelConfigRules: z.unknown(),
+        modelConfigOverrides: z.unknown().optional(),
       })
       .strict(),
   })
@@ -52,6 +55,13 @@ export function decodeZCodeBuiltinRelease(input: unknown): ZCodeBuiltinRelease {
       providers,
       providerTemplates,
       modelConfigRules: parseZCodeBuiltinModelConfigRules(parsed.config.modelConfigRules),
+      ...(parsed.config.modelConfigOverrides === undefined
+        ? {}
+        : {
+            modelConfigOverrides: parseZCodeBuiltinModelConfigRules(
+              parsed.config.modelConfigOverrides,
+            ),
+          }),
     }),
   });
 }
@@ -66,6 +76,9 @@ export function encodeZCodeBuiltinRelease(release: ZCodeBuiltinRelease): object 
         providerRules: release.config.providers.toJSON(),
       },
       modelConfigRules: release.config.modelConfigRules.toZCodeBuiltinJSON(),
+      ...(release.config.modelConfigOverrides === undefined
+        ? {}
+        : { modelConfigOverrides: release.config.modelConfigOverrides.toZCodeBuiltinJSON() }),
     },
   };
 }
