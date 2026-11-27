@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { buildSync } from "esbuild";
 import { resolvePreinstalledToolsRelease } from "@zcode/shared/preinstalled-tools";
@@ -214,6 +214,7 @@ describe("desktop product identity", () => {
   });
 
   it("Fen Jue 从编译期身份直接解析数据根，不依赖启动器环境变量", () => {
+    // Windows 的路径拼接使用反斜杠，工程断言不能把 POSIX 字面值当作产品规则。
     for (const flavor of ["production", "preview", "fenjue"]) {
       const result = buildSync({
         stdin: {
@@ -234,7 +235,7 @@ describe("desktop product identity", () => {
         encoding: "utf8",
       });
       expect(JSON.parse(output)).toEqual([
-        flavor === "fenjue" ? "/fixture/.fen-jue-home" : "/fixture",
+        flavor === "fenjue" ? join("/fixture", ".fen-jue-home") : "/fixture",
         "/explicit",
       ]);
     }

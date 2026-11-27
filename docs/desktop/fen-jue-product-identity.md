@@ -57,7 +57,7 @@ ZCODE_ENV=production ZCODE_FENJUE_IDENTITY=1 ZCODE_DESKTOP_DIST_DIR=dist-fenjue 
 ## 验收
 
 1. 身份工程测试覆盖开关真值、生产/测试组合、Windows AUMID，以及原 production/preview 回归。
-2. 数据根工程测试覆盖 Fen Jue 默认根、显式目录覆盖、运行时覆盖与已有 HOME 行为；构建期常量用 bundle 验证，不仅断言辅助函数。
+2. 数据根工程测试覆盖 Fen Jue 默认根、显式目录覆盖、运行时覆盖与已有 HOME 行为；构建期常量用 bundle 验证，不仅断言辅助函数。Windows/macOS/Linux 的拼接路径按宿主分隔符断言，显式传入的目录值保持原样。
 3. Main/Host/Renderer 编译进同一身份；预装工具的 release 映射可验证。
 4. 安装包的 Info.plist 为 `Fen Jue` / `dev.fenjue.app`，包含 Mach-O 主程序、Electron Framework、app.asar、内置 Agent。
 5. 移除两个外部启动隔离变量后直接启动 Fen Jue.app；核对独立 userData、CLI 会话库 ready、官方实例继续使用自身目录。
