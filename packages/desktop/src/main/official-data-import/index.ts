@@ -246,11 +246,23 @@ export function createOfficialDataImport(source: string, target: string) {
         let skippedLinks = 0;
         let processedFiles = 0;
         let processedBytes = 0;
+        // 失败窗口只显示错误文本，必须带上具体文件路径，用户才能自行处置
+        // （例如 cli/db/db.sqlite-wal 是运行中官方 CLI 的活动 WAL——先退出官方再迁移）。
+        const withPath = (relPath: string, error: unknown): Error => {
+          const cause = error as Error;
+          return new Error(`${relPath}: ${cause?.message ?? String(error)}`);
+        };
         for (const file of files) {
           const dest = join(stage, file.path);
           await mkdir(dirname(dest), { recursive: true });
           const sourceFile = join(source, file.path);
-          if ((await lstat(sourceFile)).isSymbolicLink()) {
+          let statInfo;
+          try {
+            statInfo = await lstat(sourceFile);
+          } catch (error) {
+            throw withPath(file.path, error);
+          }
+          if (statInfo.isSymbolicLink()) {
             // 官方目录包含 skills 等兼容链接；递归跟随会重复复制或越过数据根。
             // 复制链接自身，内部引用改指最终目标根，目录联接无需 Windows 符号链接提权。
             const raw = await readlink(sourceFile);
@@ -279,8 +291,16 @@ export function createOfficialDataImport(source: string, target: string) {
             await emit("copy", processedFiles, processedBytes, files.length, totalBytes);
             continue;
           }
-          await copyFile(join(source, file.path), dest);
-          hashes.set(file.path, await digest(dest));
+          try {
+            await copyFile(join(source, file.path), dest);
+          } catch (error) {
+            throw withPath(file.path, error);
+          }
+          try {
+            hashes.set(file.path, await digest(dest));
+          } catch (error) {
+            throw withPath(file.path, error);
+          }
           processedFiles += 1;
           processedBytes += file.bytes;
           await emit("copy", processedFiles, processedBytes, files.length, totalBytes);
@@ -294,7 +314,13 @@ export function createOfficialDataImport(source: string, target: string) {
         await emit("verify", 0, 0, files.length, totalBytes);
         let verified = 0;
         for (const [file, hash] of hashes) {
-          if ((await digest(join(source, file))) !== hash) throw new Error("import-source-changed");
+          let current: string;
+          try {
+            current = await digest(join(source, file));
+          } catch (error) {
+            throw withPath(file, error);
+          }
+          if (current !== hash) throw new Error(`source-changed: ${file}`);
           verified += 1;
           await emit("verify", verified, processedBytes, files.length, totalBytes);
         }

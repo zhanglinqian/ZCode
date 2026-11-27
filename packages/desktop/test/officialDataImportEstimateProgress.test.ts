@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, symlink, writeFile, rm, readFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, symlink, writeFile, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -122,5 +122,26 @@ describe("official data import estimate & progress", () => {
     const linkTick = progress.find((entry) => entry.phase === "copy" && entry.processedFiles === 2);
     expect(linkTick).toBeDefined();
     expect(linkTick!.processedFiles).toBe(2);
+  });
+
+  it("copy failure surfaces the offending file path in the error message", async () => {
+    const { source, target } = await fixture();
+    // 不可读文件：copyFile EACCES，错误信息必须带相对路径，
+    // 失败窗口据此告诉用户是哪个文件挡住了迁移（例如运行中官方 CLI 的 WAL）。
+    // 注意文件名不能命中 excluded 规则（*.lock/logs/cache 等会被直接跳过）。
+    const unreadable = join(source, "cli", "unreadable.dat");
+    await writeFile(unreadable, "secret");
+    await chmod(unreadable, 0o000);
+    const importer = createOfficialDataImport(source, target);
+    await importer.schedule("import");
+    const phases: Progress["phase"][] = [];
+    await expect(
+      importer.run((progress) => {
+        if (phases[phases.length - 1] !== progress.phase) phases.push(progress.phase);
+      }),
+    ).rejects.toThrow(/cli\/unreadable\.dat/);
+    expect(phases[0]).toBe("copy");
+    // 回滚：pending 清除、target 保持迁移前状态
+    await expect(importer.hasPending()).resolves.toBe(false);
   });
 });

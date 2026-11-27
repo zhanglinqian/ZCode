@@ -108,8 +108,17 @@ interface OfficialDataImportBridge {
   quit(): void;
 }
 
-const bridge = (window as unknown as { officialDataImportBridge: OfficialDataImportBridge })
+const bridge = (window as unknown as { officialDataImportBridge?: OfficialDataImportBridge })
   .officialDataImportBridge;
+
+if (!bridge) {
+  // 防御：preload 未加载时页面不能静默卡死，把原因直接写出来。
+  phaseEl.textContent =
+    locale === "en-US"
+      ? "Initialization failed: preload bridge is missing."
+      : "初始化失败：preload bridge 未加载。";
+  throw new Error("official-data-import bridge missing");
+}
 
 bridge.onProgress((progress) => renderProgress(progress));
 bridge.onFinished(() => {

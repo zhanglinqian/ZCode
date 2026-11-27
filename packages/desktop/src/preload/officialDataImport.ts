@@ -7,7 +7,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { PlatformChannels } from "@zcode/shared";
 
-contextBridge.exposeInMainWorld("officialDataImport", {
+contextBridge.exposeInMainWorld("officialDataImportBridge", {
   /** 接收迁移进度（copy/verify/swap 阶段计数）。 */
   onProgress: (callback: (payload: unknown) => void) => {
     const listener = (_event: unknown, payload: unknown) => callback(payload);

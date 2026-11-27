@@ -28,6 +28,8 @@ export interface OfficialDataImportProgressDeps {
   onQuit: () => void;
   /** 失败（已回滚，旧数据保留）：与旧行为一致，非零退出让用户重新打开。 */
   onFailExit: () => void;
+  /** 失败诊断日志（index.ts 的 logger）。 */
+  log?: (message: string, details?: unknown) => void;
 }
 
 type Outcome = "handled" | "unavailable";
@@ -116,8 +118,11 @@ export async function runOfficialDataImportWithProgressWindow(
     const code =
       diagnostic.code ??
       (/^[a-z]+(?:-[a-z]+)+$/.test(diagnostic.message) ? diagnostic.message : "migration-failed");
+    // 失败详情必须带具体文件路径（例如 cli/db/db.sqlite-wal 是运行中官方 CLI 的活动 WAL），
+    // 用户才能自行处置；窗口展示完整文本，日志保留归一化 code。
+    deps.log?.("[official-data-import] migration failed", { code });
     if (!win.isDestroyed()) {
-      win.webContents.send(PlatformChannels.OfficialDataImportFailed, code);
+      win.webContents.send(PlatformChannels.OfficialDataImportFailed, diagnostic.message || code);
     }
   }
   // 完成态 / 失败态都常驻窗口，等用户点「重启应用」或「退出」再收尾。

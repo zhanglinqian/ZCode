@@ -1808,6 +1808,25 @@ async function executeDesktopCommandForApp(
     } catch (error) {
       logger.warn("[official-data-import] estimate failed", { error: String(error) });
     }
+    // 迁移复制官方源的活文件（cli/db 的 WAL 等）可能因文件变动失败；
+    // 检测到官方 ZCode / 其 CLI 仍在运行时在确认框里追加醒目告警（尽力而为，失败不影响确认）。
+    let runningWarning = "";
+    if (!restore) {
+      try {
+        const { execFile } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        const running = await promisify(execFile)("pgrep", ["-f", "/Applications/ZCode.app"], {
+          timeout: 3_000,
+        });
+        if (running.stdout.trim().length > 0) {
+          runningWarning = zh
+            ? "\n\n⚠️ 检测到官方 ZCode 或其 CLI 正在运行：迁移可能因文件变动失败，建议先完全退出官方 ZCode。"
+            : "\n\n⚠️ Official ZCode or its CLI appears to be running; the migration may fail on changing files. Quit it completely first.";
+        }
+      } catch {
+        // pgrep 无匹配时非零退出 = 官方未运行；其他错误一并按未检测到处理。
+      }
+    }
     const confirmation = await dialog.showMessageBox({
       type: "warning",
       buttons: zh ? ["取消", "确认并重启"] : ["Cancel", "Confirm and restart"],
@@ -1828,7 +1847,8 @@ async function executeDesktopCommandForApp(
           : zh
             ? "请先退出官方 ZCode 并停止其 CLI。导入后将使用官方历史和配置，Fen Jue 现有数据保留为可恢复备份。某些账号需重新登录。"
             : "Quit official ZCode and stop its CLI first. Official history and settings will replace the active data. The previous data will be recoverable. Some accounts require sign-in again.") +
-        estimateLine,
+        estimateLine +
+        runningWarning,
     });
     if (confirmation.response !== 1) return;
     await officialDataImport.schedule(restore ? "restore" : "import");
@@ -2413,6 +2433,7 @@ app.whenReady().then(async () => {
         locale: currentApplicationLocale,
         rendererDir: join(import.meta.dirname, "../renderer"),
         devServerUrl: !app.isPackaged ? process.env["ELECTRON_RENDERER_URL"] : undefined,
+        log: (message, details) => logger.warn(message, details),
         onRestart: () => {
           app.relaunch();
           app.quit();
