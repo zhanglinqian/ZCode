@@ -3867,6 +3867,7 @@ const enUS: Record<string, string> = {
   "settings.modelRelay.addDialogLoading": "Loading quota…",
   "settings.modelRelay.addDialogUnavailable": "5-hour quota is temporarily unavailable, please retry later.",
   "settings.modelRelay.addDialogNoResults": "Nothing to add: only models with a 5-hour window can join the chain.",
+  "settings.modelRelay.addDialogNoQuota": "No 5-hour window",
   "settings.modelRelay.addDialogUsed": "5-hour used {used}%",
   "settings.shortcuts.title": "Keyboard Shortcuts",
   "settings.shortcuts.searchPlaceholder": "Search shortcuts",

@@ -3507,6 +3507,7 @@ const jaJP: Record<string, string> = {
   "settings.modelRelay.addDialogLoading": "使用率を読み込み中…",
   "settings.modelRelay.addDialogUnavailable": "5時間ウィンドウの使用率を取得できません。後でお試しください。",
   "settings.modelRelay.addDialogNoResults": "追加できるモデルがありません。5時間ウィンドウのあるモデルのみ追加できます。",
+  "settings.modelRelay.addDialogNoQuota": "5時間ウィンドウなし",
   "settings.modelRelay.addDialogUsed": "5時間 {used}% 使用",
   "settings.shortcuts.title": "キーボードショートカット",
   "settings.shortcuts.searchPlaceholder": "ショートカットを検索",

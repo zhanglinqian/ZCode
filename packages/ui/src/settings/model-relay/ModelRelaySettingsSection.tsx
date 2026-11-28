@@ -281,10 +281,12 @@ function ModelRelayAddDialog({
                   <div className="flex items-center justify-between text-ui-sm">
                     <span className="font-medium text-foreground">{group.providerName}</span>
                     <span className="tabular-nums text-remote-foreground-muted">
-                      {intl.formatMessage(
-                        { id: "settings.modelRelay.addDialogUsed" },
-                        { used: Math.round(group.models[0]?.usedPercent ?? 0) },
-                      )}
+                      {group.usedPercent === undefined
+                        ? intl.formatMessage({ id: "settings.modelRelay.addDialogNoQuota" })
+                        : intl.formatMessage(
+                            { id: "settings.modelRelay.addDialogUsed" },
+                            { used: Math.round(group.usedPercent) },
+                          )}
                     </span>
                   </div>
                   <div className="space-y-1">
@@ -298,7 +300,9 @@ function ModelRelayAddDialog({
                       >
                         <span className="truncate">{model.modelId}</span>
                         <span className="shrink-0 text-ui-sm tabular-nums text-remote-foreground-muted">
-                          {Math.round(model.usedPercent)}%
+                          {model.usedPercent === undefined
+                            ? "—"
+                            : `${Math.round(model.usedPercent)}%`}
                         </span>
                       </button>
                     ))}

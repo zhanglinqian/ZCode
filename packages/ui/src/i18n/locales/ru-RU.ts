@@ -3479,6 +3479,7 @@ const ruRU: Record<string, string> = {
   "settings.modelRelay.addDialogLoading": "Загрузка квоты…",
   "settings.modelRelay.addDialogUnavailable": "Пока не удалось получить 5-часовое окно, повторите позже.",
   "settings.modelRelay.addDialogNoResults": "Добавлять нечего: в цепь можно добавить только модели с 5-часовым окном.",
+  "settings.modelRelay.addDialogNoQuota": "Нет 5-часового окна",
   "settings.modelRelay.addDialogUsed": "5 часов: использовано {used}%",
   "settings.shortcuts.title": "Сочетания клавиш",
   "settings.shortcuts.searchPlaceholder": "Поиск сочетаний",

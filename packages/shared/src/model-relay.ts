@@ -80,21 +80,22 @@ export type RelayUsage =
 
 export type RelayTargetResolution =
   | { readonly kind: "keep" }
-  /** 切换到链路里的某张卡片；身份与查询到的额度事实一并返回，供日志与提示使用。 */
+  /** 切换到链路里的某张卡片；额度已知时带已用占比，未知（可用兜底）时不带。 */
   | {
       readonly kind: "switch";
       readonly entry: ModelRelayEntry;
-      readonly usedPercent: number;
+      readonly usedPercent?: number;
     }
-  /** 一圈内所有已知额度的卡片都达到阈值；未知额度的卡片不算在内。 */
+  /** 一圈内所有候选的已知额度都达到阈值（没有未知额度的候选可兜底）。 */
   | { readonly kind: "exhausted" };
 
 /**
  * 接力目标决策。
  *
  * - 链路少于 2 张、当前模型不在链路内、当前模型额度未知或未达阈值：保持。
- * - 达到阈值时从下一张开始环形扫描，返回第一个「额度已知且低于自身阈值」的卡片。
- * - 额度未知的候选跳过，也不算「全部超限」；全部已知额度都达阈值才返回 exhausted。
+ * - 达到阈值时从下一张开始环形扫描，返回第一个「可用」的卡片：额度未知（按量付费、
+ *   查询失败、无 5 小时窗口）视为可用兜底，已知额度则须低于自身阈值。
+ * - 一圈里所有候选的已知额度都达阈值（且没有未知额度的候选兜底）才返回 exhausted。
  */
 export function resolveRelayTarget(
   chain: readonly ModelRelayEntry[],
@@ -114,9 +115,14 @@ export function resolveRelayTarget(
   for (let step = 1; step < chain.length; step += 1) {
     const candidate = chain[(currentIndex + step) % chain.length]!;
     const usage = usageOf(candidate);
-    if (!usage.known) continue;
-    if (usage.usedPercent < candidate.thresholdPercent) {
-      return { kind: "switch", entry: candidate, usedPercent: usage.usedPercent };
+    // 额度未知（按量付费、无 5 小时窗口、查询失败）的候选视为可用：允许加入链路的
+    // 模型必须也能被切到，否则"按量模型当兜底终点"不成立（产品规则 2026-11-28 调整）。
+    if (!usage.known || usage.usedPercent < candidate.thresholdPercent) {
+      return {
+        kind: "switch",
+        entry: candidate,
+        ...(usage.known ? { usedPercent: usage.usedPercent } : {}),
+      };
     }
   }
   return { kind: "exhausted" };

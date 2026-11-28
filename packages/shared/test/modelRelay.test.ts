@@ -142,13 +142,36 @@ describe("resolveRelayTarget", () => {
     });
   });
 
-  it("额度未知的候选跳过且不算全部超限；全部未知时保持", () => {
+  it("额度未知的候选视为可用兜底（2026-11-28 产品规则调整）", () => {
+    // GLM-5.3 额度未给出（unknown）先于 MiniMax（已知 30%）被选中——环形顺序优先。
     const withUnknown = usageFrom({ "bigmodel/GLM-5.4": 85, "minimax/MiniMax-M3": 30 });
     expect(resolveRelayTarget(chain, chain[0]!, withUnknown)).toEqual({
       kind: "switch",
-      entry: chain[2],
-      usedPercent: 30,
+      entry: chain[1],
     });
+    // 已知低额候选环形顺序更靠前时优先选它（行为不变）。
+    const knownEarlier = usageFrom({
+      "bigmodel/GLM-5.4": 85,
+      "bigmodel/GLM-5.3": 60,
+      "minimax/MiniMax-M3": 30,
+    });
+    expect(resolveRelayTarget(chain, chain[0]!, knownEarlier)).toEqual({
+      kind: "switch",
+      entry: chain[1],
+      usedPercent: 60,
+    });
+    // GLM-5.3 额度未知（按量/查询失败）被视为可用兜底：不跳过、不带 usedPercent。
+    // 从 GLM-5.4 出发下一张就是 GLM-5.3，先选中它而不是更后面的 MiniMax。
+    const middleUnknown = usageFrom({
+      "bigmodel/GLM-5.4": 85,
+      "bigmodel/GLM-5.3": null,
+      "minimax/MiniMax-M3": 60,
+    });
+    expect(resolveRelayTarget(chain, chain[0]!, middleUnknown)).toEqual({
+      kind: "switch",
+      entry: chain[1],
+    });
+
     const allUnknown = usageFrom({
       "bigmodel/GLM-5.4": null,
       "bigmodel/GLM-5.3": null,
@@ -157,19 +180,19 @@ describe("resolveRelayTarget", () => {
     // 当前模型额度未知时不判定、照常发送（规范「不触发的情况」）。
     expect(resolveRelayTarget(chain, chain[0]!, allUnknown)).toEqual({ kind: "keep" });
 
-    // 当前模型已知超额、其余候选额度未知（如接口故障）：没有可用候选，按全部超限停下，
-    // 不在无法验证备选的情况下照发一个已超额的模型。
+    // 当前模型已知超额、其余候选额度未知：切到第一个未知额度候选（可用兜底）。
     const currentOverOthersUnknown = usageFrom({
       "bigmodel/GLM-5.4": 85,
       "bigmodel/GLM-5.3": null,
       "minimax/MiniMax-M3": null,
     });
     expect(resolveRelayTarget(chain, chain[0]!, currentOverOthersUnknown)).toEqual({
-      kind: "exhausted",
+      kind: "switch",
+      entry: chain[1],
     });
   });
 
-  it("一圈内所有已知额度都达阈值时返回 exhausted", () => {
+  it("一圈内所有候选的已知额度都达阈值且无未知兜底时返回 exhausted", () => {
     const usage = usageFrom({
       "bigmodel/GLM-5.4": 90,
       "bigmodel/GLM-5.3": 80,

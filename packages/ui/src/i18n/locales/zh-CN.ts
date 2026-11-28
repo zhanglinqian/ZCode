@@ -3609,6 +3609,7 @@ const zhCN: Record<string, string> = {
   "settings.modelRelay.addDialogLoading": "正在读取额度…",
   "settings.modelRelay.addDialogUnavailable": "暂时读不到 5 小时额度，请稍后重试。",
   "settings.modelRelay.addDialogNoResults": "没有可添加的模型：只有带 5 小时额度的模型可以加入链路。",
+  "settings.modelRelay.addDialogNoQuota": "无 5 小时额度",
   "settings.modelRelay.addDialogUsed": "5 小时已用 {used}%",
   "settings.shortcuts.title": "键盘快捷键",
   "settings.shortcuts.searchPlaceholder": "搜索快捷键",

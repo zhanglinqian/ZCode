@@ -3417,6 +3417,7 @@ const koKR: Record<string, string> = {
   "settings.modelRelay.addDialogLoading": "사용량을 불러오는 중…",
   "settings.modelRelay.addDialogUnavailable": "5시간 창 사용량을 일시적으로 가져올 수 없습니다. 나중에 다시 시도하세요.",
   "settings.modelRelay.addDialogNoResults": "추가할 모델이 없습니다. 5시간 창이 있는 모델만 체인에 추가할 수 있습니다.",
+  "settings.modelRelay.addDialogNoQuota": "5시간 창 없음",
   "settings.modelRelay.addDialogUsed": "5시간 {used}% 사용",
   "settings.shortcuts.title": "키보드 단축키",
   "settings.shortcuts.searchPlaceholder": "단축키 검색",

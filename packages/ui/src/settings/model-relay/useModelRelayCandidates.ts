@@ -22,13 +22,15 @@ const CANDIDATES_TTL_MS = 30_000;
 
 export interface ModelRelayCandidateModel {
   readonly modelId: string;
-  /** 该供应商 5 小时窗口的已用占比；与额度一起返回，供对话框直接展示。 */
-  readonly usedPercent: number;
+  /** 该供应商 5 小时窗口的已用占比；读不到额度（按量付费/查询失败）时缺席。 */
+  readonly usedPercent?: number;
 }
 
 export interface ModelRelayCandidateGroup {
   readonly providerId: string;
   readonly providerName: string;
+  /** 供应商级 5 小时已用占比；读不到额度时缺席（套餐级共享桶，取归一后的首个窗口）。 */
+  readonly usedPercent?: number;
   readonly models: readonly ModelRelayCandidateModel[];
 }
 
@@ -40,7 +42,11 @@ export interface ModelRelayCandidatesState {
 
 const candidatesCache = new Map<string, { expiresAt: number; state: ModelRelayCandidatesState }>();
 
-/** 读不到额度的供应商归成一组提示，而不是静默消失——用户需要知道为什么列不出模型。 */
+/**
+ * 候选 = 所有已开启供应商下已开启的模型（2026-11-28 产品规则：不再要求有 5 小时
+ * 额度——按量付费、自定义模型都能加入；额度读得到就展示占比，读不到由
+ * resolveRelayTarget 把它当可用兜底）。
+ */
 export function useModelRelayCandidates(enabled: boolean): ModelRelayCandidatesState {
   const services = useOptionalBaseWorkspaceServices();
   const usageStatsService = services?.usageStatsService;
@@ -66,7 +72,10 @@ export function useModelRelayCandidates(enabled: boolean): ModelRelayCandidatesS
     }
     let cancelled = false;
     const candidates = providers.filter(
-      (provider) => provider.enabled && provider.executable && provider.models.length > 0,
+      (provider) =>
+        provider.enabled &&
+        provider.executable &&
+        provider.models.some((model) => model.enabled),
     );
     if (candidates.length === 0) {
       const empty: ModelRelayCandidatesState = {
@@ -81,6 +90,10 @@ export function useModelRelayCandidates(enabled: boolean): ModelRelayCandidatesS
     setState({ groups: [], loading: true, error: null });
     Promise.all(
       candidates.map(async (provider) => {
+        // 模型级开关：未开启的模型不进候选（产品规则）。
+        const enabledModels = provider.models.filter((model) => model.enabled);
+        let usedPercent: number | undefined;
+        let failed = false;
         try {
           const snapshot: UsageEntitlementSnapshot = await usageStatsService.getEntitlementSnapshot(
             {
@@ -89,34 +102,39 @@ export function useModelRelayCandidates(enabled: boolean): ModelRelayCandidatesS
               requirePreferredProvider: true,
             },
           );
-          const usedPercent = readFiveHourUsedPercent(snapshot.quota?.limits ?? []);
-          if (usedPercent === null) return null;
+          usedPercent = readFiveHourUsedPercent(snapshot.quota?.limits ?? []) ?? undefined;
+        } catch {
+          // 额度查询失败不影响候选资格：该组照常列出（展示「无 5 小时额度」）。
+          failed = true;
+        }
+        if (usedPercent === undefined && failed) {
           return {
             providerId: provider.providerId,
             providerName: provider.providerName ?? provider.providerId,
-            models: provider.models.map((model) => ({ modelId: model.modelId, usedPercent })),
+            usedPercent: undefined,
+            models: enabledModels.map((model) => ({ modelId: model.modelId })),
           } satisfies ModelRelayCandidateGroup;
-        } catch (error) {
-          // 单家失败只跳过该供应商；全部失败时由下方汇总 error。
-          return { error: error instanceof Error ? error.message : String(error) } as const;
         }
+        return {
+          providerId: provider.providerId,
+          providerName: provider.providerName ?? provider.providerId,
+          ...(usedPercent === undefined ? {} : { usedPercent }),
+          models: enabledModels.map((model) => ({
+            modelId: model.modelId,
+            ...(usedPercent === undefined ? {} : { usedPercent }),
+          })),
+        } satisfies ModelRelayCandidateGroup;
       }),
     ).then((results) => {
       if (cancelled) return;
       const groups: ModelRelayCandidateGroup[] = [];
-      let failures = 0;
       for (const result of results) {
-        if (result === null) continue;
-        if ("error" in result) {
-          failures += 1;
-          continue;
-        }
         groups.push(result);
       }
       const next: ModelRelayCandidatesState = {
         groups,
         loading: false,
-        error: failures > 0 && groups.length === 0 ? `quota_unavailable:${failures}` : null,
+        error: null,
       };
       candidatesCache.set(cacheKey, { expiresAt: Date.now() + CANDIDATES_TTL_MS, state: next });
       setState(next);

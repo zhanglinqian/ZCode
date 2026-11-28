@@ -65,12 +65,16 @@ before(async () => {
           if (id.endsWith("/hooks/useWorkspaceServices.tsx")) {
             // 返回值必须跨渲染稳定：候选 hook 的 effect 依赖 usageStatsService 引用，
             // 每次渲染新对象会让结果被 cleanup 无限丢弃（真实 context 是稳定引用）。
+            // BigModel 返回 TIME_LIMIT 额度；MiniMax 返回空额度（验证「无 5 小时额度」
+            // 组照常列出，模型不再被额度门槛过滤）。
             return [
               "const services = {",
               "  usageStatsService: {",
               "    getEntitlementSnapshot: async (request) => ({",
               "      provider: { id: request.preferredProviderId, name: request.preferredProviderId },",
-              "      quota: { level: null, limits: [{ type: 'TIME_LIMIT', percentage: 42, usageDetails: [] }] },",
+              "      quota: request.preferredProviderId === 'fixture-bigmodel'",
+              "        ? { level: null, limits: [{ type: 'TIME_LIMIT', percentage: 42, usageDetails: [] }] }",
+              "        : { level: null, limits: [] },",
               "    }),",
               "  },",
               "};",
@@ -89,8 +93,8 @@ before(async () => {
               "      providerTemplates: [],",
               "      providerOrder: ['fixture-bigmodel', 'fixture-minimax'],",
               "      providers: [",
-              "        { providerId: 'fixture-bigmodel', providerName: 'BigModel', enabled: true, executable: true, models: [{ modelId: 'GLM-5.4' }, { modelId: 'GLM-5.3' }], effectiveConfig: {} },",
-              "        { providerId: 'fixture-minimax', providerName: 'MiniMax', enabled: true, executable: true, models: [{ modelId: 'MiniMax-M3' }], effectiveConfig: {} },",
+              "        { providerId: 'fixture-bigmodel', providerName: 'BigModel', enabled: true, executable: true, models: [{ modelId: 'GLM-5.4', enabled: true }, { modelId: 'GLM-5.3', enabled: true }], effectiveConfig: {} },",
+              "        { providerId: 'fixture-minimax', providerName: 'MiniMax', enabled: true, executable: true, models: [{ modelId: 'MiniMax-M3', enabled: true }, { modelId: 'MiniMax-DISABLED', enabled: false }], effectiveConfig: {} },",
               "      ],",
               "    },",
               "  },",
@@ -219,13 +223,28 @@ test("模型接力设置页", { timeout: 120000 }, async () => {
   assert.equal(await page.locator('[data-testid="model-relay-card"]').count(), 1);
   assert.equal(await page.locator('[data-testid="model-relay-inactive-hint"]').count(), 1);
 
-  // 添加模型：对话框只列 5 小时额度可读的供应商；已在链路里的模型被过滤。
+  // 添加模型：所有已开启供应商的已开启模型都列出（2026-11-28 规则：不再按 5 小时
+  // 额度过滤）；已在链路里的模型被过滤；未开启的模型不出现。
   // 上一步删除的是拖到首位的 MiniMax-M3，所以它重新可加，而 GLM-5.4 仍在链路里。
   await page.locator('[data-testid="model-relay-add"]').click();
   await page.waitForSelector('[data-testid="model-relay-add-groups"]');
   assert.equal(await page.locator('[data-testid="model-relay-add-model-GLM-5.3"]').count(), 1);
   assert.equal(await page.locator('[data-testid="model-relay-add-model-GLM-5.4"]').count(), 0);
   assert.equal(await page.locator('[data-testid="model-relay-add-model-MiniMax-M3"]').count(), 1);
+  // 模型级开关：未开启的 MiniMax-DISABLED 不进候选。
+  assert.equal(
+    await page.locator('[data-testid="model-relay-add-model-MiniMax-DISABLED"]').count(),
+    0,
+  );
+  // 额度展示：BigModel 显示百分比，MiniMax 无 5 小时额度照常列出（右侧占位符）。
+  assert.match(
+    await page.locator('[data-testid="model-relay-add-model-GLM-5.3"]').innerText(),
+    /GLM-5\.3\s*42%/,
+  );
+  assert.match(
+    await page.locator('[data-testid="model-relay-add-model-MiniMax-M3"]').innerText(),
+    /MiniMax-M3\s*—/,
+  );
   await page.locator('[data-testid="model-relay-add-model-GLM-5.3"]').click();
   assert.equal(await page.locator('[data-testid="model-relay-card"]').count(), 2);
   assert.equal(
