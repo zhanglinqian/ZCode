@@ -13,6 +13,8 @@ import {
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
   TEST_ZCODE_ENDPOINT_ORIGIN,
   PlatformChannels,
+  ZCODE_FENJUE_UPDATE_MANIFEST_URL,
+  ZCODE_PRODUCT_FLAVOR,
   ZCODE_VERSION,
   desktopMenuMessageIds,
   formatDesktopMenuMessage,
@@ -100,6 +102,30 @@ type UpdateDownloadedInfoLike = {
 };
 
 type RuntimeUpdateFeedSource = { url: string };
+
+/**
+ * Fen Jue（二开版）打包态的 manifest 更新源：构建期注入的完整 latest.yml URL。
+ *
+ * 只有 win32 打包态启用（mac 端 Squirrel.Mac 对 adhoc→adhoc 更新的 staging 行为
+ * 未验证，且 mac 本机构建即安装，更新器价值低）。返回 null 表示 fenjue 更新器
+ * 整体关闭——init enabled 与入口可见性都以它为准，避免"有入口没有源"。
+ */
+export function resolveFenJuePackagedManifestUrl(): string | null {
+  if (ZCODE_PRODUCT_FLAVOR !== "fenjue") return null;
+  if (process.platform !== "win32") return null;
+  const manifestUrl = ZCODE_FENJUE_UPDATE_MANIFEST_URL.trim();
+  return manifestUrl !== "" ? manifestUrl : null;
+}
+
+/**
+ * Windows 更新安装包的 Authenticode 校验只对官方签名包有意义；Fen Jue 构建未签名，
+ * 双重校验（下载后 + 安装前）必然拒绝自己的包。fenjue 跳过它，完整性由 manifest
+ * sha512 兜底（electron-updater 原生行为）。代价：manifest 可写者可推送任意可执行
+ * 内容——已在 docs/desktop/fen-jue-product-identity.md 的信任边界章节明示。
+ */
+function shouldVerifyWindowsUpdateSignature(): boolean {
+  return ZCODE_PRODUCT_FLAVOR !== "fenjue";
+}
 
 type AutoUpdaterMenuState = UpdateStatePayload;
 let menuState: AutoUpdaterMenuState = { kind: "idle", enabled: true };
@@ -571,7 +597,7 @@ async function quitAndInstallUpdate(rejectUnavailable = false, showLinuxAuthoriz
       return;
     }
   }
-  if (process.platform === "win32" && app.isPackaged) {
+  if (process.platform === "win32" && app.isPackaged && shouldVerifyWindowsUpdateSignature()) {
     try {
       // 6.8.10 命中已下载缓存时跳过下载 hook；在退出服务前复查实际待安装文件。
       // 读取既有 updater 的安装路径，避免另存一份路径导致 ready 与安装目标不同步。
@@ -920,8 +946,12 @@ async function syncAutoUpdateCheckChannelFromSettings(
 }
 
 function applyManifestUpdateProvider(options: InitAutoUpdaterOptions): void {
+  // Fen Jue 打包态用构建期注入的 manifest 源（dev 态解析为 null，走原有 dev 通道）。
+  // 非 fenjue 打包态继续硬拒任何可配置更新源：正式包只允许官方 endpoint。
+  const fenJueManifestUrl = resolveFenJuePackagedManifestUrl();
   // 在更新器装配边界再次约束，避免内部调用绕过启动配置解析。
-  const manifestUrl = app.isPackaged ? undefined : options.updateFeedSource?.url.trim();
+  const manifestUrl =
+    fenJueManifestUrl ?? (app.isPackaged ? undefined : options.updateFeedSource?.url.trim());
   autoUpdater.setFeedURL({
     provider: "custom",
     updateProvider: ManifestUpdateProvider,
@@ -1770,9 +1800,13 @@ export async function initAutoUpdater(options: InitAutoUpdaterOptions = {}): Pro
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.logger = logger;
   if (autoUpdater instanceof pkg.NsisUpdater) {
-    // 保留包内 publisherName 来激活 NSIS hook，但不把旧 DN 当作未来换证的准入条件。
-    autoUpdater.verifyUpdateCodeSignature = (_publisherNames, filePath) =>
-      verifyWindowsAuthenticodeSignature(filePath);
+    // fenjue 未签名：安装 hook 的签名校验必须一并关闭，否则下载完成即拒绝（见
+    // shouldVerifyWindowsUpdateSignature 的信任边界说明）。
+    if (shouldVerifyWindowsUpdateSignature()) {
+      // 保留包内 publisherName 来激活 NSIS hook，但不把旧 DN 当作未来换证的准入条件。
+      autoUpdater.verifyUpdateCodeSignature = (_publisherNames, filePath) =>
+        verifyWindowsAuthenticodeSignature(filePath);
+    }
   }
   applyManifestUpdateProvider(options);
 

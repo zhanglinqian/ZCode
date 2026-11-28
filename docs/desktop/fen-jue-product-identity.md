@@ -15,7 +15,7 @@ Fen Jue 是当前源码构建出的完整 Electron 应用，不是启动器，�
 | Electron userData        | appData/Fen Jue                                    | 各身份独立                      |
 | 默认业务 base            | HOME/.fen-jue-home                                 | production/preview 仍为 HOME    |
 | 业务目录                 | HOME/.fen-jue-home/.zcode                          | 官方仍为 HOME/.zcode            |
-| 更新                     | 不初始化官方更新器、不触发强更、不显示检查更新入口 | production 策略不变             |
+| 更新                     | 独立增量更新（win32 打包态，构建期 `ZCODE_FENJUE_UPDATE_MANIFEST_URL` 开关；详见「Fen Jue 自动更新」节）| production 策略不变             |
 | 预装工具                 | 使用 production release，目录位于自身业务根下      | 不新增远端 release 值           |
 | CUA Helper 变体          | fenjue                                             | 不放宽签名或 Team 校验          |
 | 图标                     | 暂沿用现有素材                                     | 本轮不生成新品牌图形            |
@@ -44,6 +44,7 @@ Fen Jue 是当前源码构建出的完整 Electron 应用，不是启动器，�
 - `zcode://` 仍为上游 OAuth/支付等回调协议，两个产品安装后系统只保留一个默认处理器，不能保证回到发起登录的实例。本轮不绕过服务端 redirect URI 校验，也不承诺消除该冲突。
 - 外部签名 CUA Helper 的 launcher requirement 仅接受官方 appId/Preview 与指定 Team。`dev.fenjue.app` 暂不受信任；保持 fail-closed，不启用开发逃生开关、不扩大 allowlist、不修改外部签名产物。恢复需合法提供信任 Fen Jue 签名主体的 Helper。
 - 不全局替换协议名、包名、服务 URL、版权/第三方声明或产品文案中的所有 ZCode 字样。系统产品名和主窗口标题为 Fen Jue。
+- Fen Jue 增量更新（win32 打包态）自带独立信任边界：manifest 托管服务器 = 更新信任根，且跳过 Windows Authenticode 校验，详见「Fen Jue 自动更新」节。
 - 本轮只本机构建安装，不修改上游发布流水线、不提交或推送、不触发上传发布。
 
 ## 构建命令
@@ -53,6 +54,59 @@ ZCODE_ENV=production ZCODE_FENJUE_IDENTITY=1 ZCODE_DESKTOP_DIST_DIR=dist-fenjue 
 ```
 
 `dist-fenjue` 独立保存 Fen Jue 产物，不覆盖原 `dist` 中的 ZCode 构建。
+
+## Fen Jue 自动更新（增量，win32）
+
+Fen Jue 复用官方增量更新链路（`ManifestUpdateProvider` → blockmap 差分 → 显式 quit-and-install），
+由构建期 `ZCODE_FENJUE_UPDATE_MANIFEST_URL`（完整 `latest.yml` URL，见
+[构建期可选能力](build-time-optional-capabilities.md)）整体开关：
+
+- **仅 win32 打包态启用**（`resolveFenJuePackagedManifestUrl()`：fenjue + win32 + URL 非空）。
+  mac 端 Squirrel.Mac 对 adhoc→adhoc 更新的 staging 行为未验证，且 mac 本机构建即安装，保持关闭。
+- **未注入 URL 时更新器整体关闭**：入口可见（flavor 非 preview），但 init fail-closed、点击无效果、状态恒 idle。
+- 强制更新 gate 仍仅 production，fenjue 不启用。
+
+### 信任边界（明确的取舍）
+
+1. **manifest 源 = 更新信任根**：fenjue 打包态允许自定义 manifest URL（官方包硬编码官方 HTTPS），
+   并跳过 Windows Authenticode 双重校验（构建未签名，校验必然自拒；`shouldVerifyWindowsUpdateSignature`）。
+   安装完整性由 manifest 的 sha512 兜底——它只保证"文件与 manifest 一致"，不保证"manifest 可信"。
+   **能写托管服务器 `latest.yml` 的人即可向所有 Fen Jue 客户端推送任意可执行内容**，因此该服务器
+   的 SSH 凭据按"发布密钥"等级对待（密钥登录、禁密码、不存凭据、发布从本机推送）。
+2. 托管为静态 nginx（阿里云轻量 `47.93.185.158`，别名 `ssh aliyun-hz`，端口 80 免备案）：目录
+   `/var/www/fenjue-releases/`，结构 `<version>/<platform-arch>/{安装包,*.blockmap,latest.yml}`
+   + `current/<platform-arch>/latest.yml`（客户端固定轮询的稳定路径，永指向最新发布）。
+3. provider 追加的 `platform`/`channel`/`device_mid` 查询参数被静态服务忽略，无灰度语义。
+
+### 发布流程
+
+Windows 侧构建（与常规 fenjue 构建唯一差异是多一个环境变量）：
+
+```powershell
+$env:ZCODE_FENJUE_UPDATE_MANIFEST_URL = "http://47.93.185.158/current/windows-x64/latest.yml"
+# 其余沿用「Windows 构建」步骤
+pnpm bundle:desktop -- win x64
+```
+
+产物发布（从构建机推送，三件套：安装包 + `.blockmap` + `latest.yml`）：
+
+```bash
+VER=4.0.1; ARCH=windows-x64; BASE=http://47.93.185.158
+ssh aliyun-hz "mkdir -p /var/www/fenjue-releases/$VER/$ARCH /var/www/fenjue-releases/current/$ARCH"
+scp "packages/desktop/dist/Fen Jue-$VER-win-x64.exe"* aliyun-hz:/var/www/fenjue-releases/$VER/$ARCH/
+# 关键：latest.yml 内的相对 url 必须改写为绝对 URL——provider 以 manifest URL 的根为 base
+# 解析相对路径，不改写会落到错误目录；blockmap URL 由 electron-updater 从安装包 URL 推导。
+sed -E "s#^(path:[[:space:]]*|- url:[[:space:]]*)#\\1$BASE/$VER/$ARCH/#" \
+  "packages/desktop/dist/latest.yml" > "/tmp/latest-$VER.yml"
+scp "/tmp/latest-$VER.yml" aliyun-hz:/var/www/fenjue-releases/current/$ARCH/latest.yml
+```
+
+### 更新验收
+
+1. 未注入 URL 的 fenjue 包：更新器关闭（入口点击无效果、状态恒 idle），与改造前一致。
+2. 注入 URL 的 win32 包：手动检查拉到 `current/.../latest.yml`，blockmap 差分下载生效
+   （下载量远小于全量包），"重启以更新"完成 NSIS 安装并升级成功。
+3. `scripts/test/build-time-config.test.mjs` 覆盖 URL 注入、空串关闭与 define 字面量。
 
 ## 验收
 
@@ -94,6 +148,8 @@ pnpm install
 $env:ZCODE_ENV = "production"
 $env:ZCODE_FENJUE_IDENTITY = "1"
 $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
+# 可选：启用 Fen Jue 增量更新（win32 打包态）；不设置则更新器关闭
+$env:ZCODE_FENJUE_UPDATE_MANIFEST_URL = "http://47.93.185.158/current/windows-x64/latest.yml"
 pnpm bundle:desktop -- win x64
 ```
 

@@ -697,7 +697,10 @@ export async function executeDesktopCommand(options: {
       return;
     case DesktopCommandIds.CheckForUpdates:
       // 按产品身份而不是后端环境放行：生产后端的 Preview 同样没有更新器。
-      if (ZCODE_PRODUCT_FLAVOR === "production") {
+      // Fen Jue 放行到 checkForUpdateMenuClick；其更新器仅在构建期注入了
+      // manifest 源时初始化（resolveFenJuePackagedManifestUrl），未注入时菜单点击
+      // 会被 autoUpdaterDisabledForProductFlavor fail-closed。
+      if (ZCODE_PRODUCT_FLAVOR !== "preview") {
         checkForUpdateMenuClick(targetWindow);
       } else {
         options.logger.info("[auto-update] Preview 已禁用手动更新检查");

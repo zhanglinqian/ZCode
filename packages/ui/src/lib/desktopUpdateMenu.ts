@@ -5,10 +5,12 @@ import {
 } from "@zcode/shared";
 
 // 更新入口跟随产品身份而不是后端环境：Preview 身份（含生产后端的 Preview）禁用更新器。
+// Fen Jue 放行——其更新器仅在构建期注入 manifest 源（win32 打包态）时初始化；
+// 未注入时入口虽可见，但命令会被 autoUpdater 的 fail-closed 拒绝且状态恒为 idle。
 export function shouldShowDesktopUpdateEntry(
   flavor: ZCodeProductFlavor = ZCODE_PRODUCT_FLAVOR,
 ): boolean {
-  return flavor === "production";
+  return flavor !== "preview";
 }
 
 export function getUpdateMenuLabelId(state: UpdateStatePayload | null) {

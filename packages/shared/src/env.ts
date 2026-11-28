@@ -11,6 +11,7 @@ declare const __ZCODE_PRODUCT_FLAVOR__: string;
 declare const __ZCODE_ARMS_RUM_ENDPOINT__: string;
 declare const __ZCODE_TELEMETRY_REPORT_ENDPOINT__: string;
 declare const __ZCODE_AUTO_UPDATE_ENABLED__: boolean;
+declare const __ZCODE_FENJUE_UPDATE_MANIFEST_URL__: string;
 
 export function normalizeZCodeEnv(value: string | undefined): ZCodeEnv {
   return value?.trim().toLowerCase() === "production" ? "production" : "test";
@@ -67,6 +68,15 @@ export const ZCODE_TELEMETRY_REPORT_ENDPOINT: string =
 /** 桌面自动更新是否启用。 */
 export const ZCODE_AUTO_UPDATE_ENABLED: boolean =
   typeof __ZCODE_AUTO_UPDATE_ENABLED__ !== "undefined" ? __ZCODE_AUTO_UPDATE_ENABLED__ : false;
+/**
+ * Fen Jue（二开版）打包态的 manifest 更新源完整 URL（latest.yml）。
+ * 由构建期 `ZCODE_FENJUE_UPDATE_MANIFEST_URL` 注入；为空 = fenjue 更新器整体关闭。
+ * 打包态更新入口是否可见也以它非空为准，避免出现"有入口但没有可用更新源"。
+ */
+export const ZCODE_FENJUE_UPDATE_MANIFEST_URL: string =
+  typeof __ZCODE_FENJUE_UPDATE_MANIFEST_URL__ !== "undefined"
+    ? __ZCODE_FENJUE_UPDATE_MANIFEST_URL__
+    : "";
 
 /** 将本地运行态与编译期 ZCODE_ENV 映射为 ARMS 控制台识别的上报环境标签 */
 export function mapZCodeEnvToArmsRumEnv(runtimeEnv: ZCodeRuntimeEnv): ArmsRumEnv {

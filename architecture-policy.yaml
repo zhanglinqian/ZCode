@@ -2688,3 +2688,8 @@ exceptions:
       - packages/ui/src/settings/model-relay/ModelRelaySettingsSection.tsx
       - packages/ui/src/settings/model-relay/useModelRelayCandidates.ts
     reason: 模型接力设置页（docs/fen-jue/model-relay.md 检查点 R3）：卡片列表（@dnd-kit/sortable 拖拽排序）、阈值滑动条（复用 composer-thought-slider.css 的视觉类，不改动 ComposerModelMenu）、添加模型对话框（候选按 5 小时额度过滤，复用 getEntitlementSnapshot 单入口）。只读写 settings.modelRelayChain，不做额度判定与切换执行；沿用 minimax/deepseek 供应商自带数据组件的登记模式，接管整个 ui 未受管模块不在本次范围内。
+  - id: fenjue-auto-update-entry-gates-edit
+    rule: unmanaged-new-file
+    paths:
+      - packages/ui/src/lib/desktopUpdateMenu.ts
+    reason: Fen Jue 增量更新改造（docs/desktop/fen-jue-product-identity.md「Fen Jue 自动更新」节）——上游已有的更新入口集中判定把 flavor === "production" 放宽为 !== "preview"，使 fenjue 入口随 win32 打包态构建期 manifest 源开关联动；仅改一行布尔与注释，不新增状态 owner 或模块边界，本次不接管整个 ui 未受管模块。

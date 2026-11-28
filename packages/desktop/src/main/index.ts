@@ -118,6 +118,7 @@ import {
   getAutoUpdaterState,
   hydratePendingPostUpdateReleaseNotes,
   initAutoUpdater,
+  resolveFenJuePackagedManifestUrl,
   onAutoUpdaterStateChanged,
   refreshAutoUpdaterReleaseChannel,
   resolveUpdateFeedSourceFromStartupConfig,
@@ -2660,8 +2661,12 @@ app.whenReady().then(async () => {
   // Preview 身份无论连接哪个后端都不自动更新：stable feed 上只分发正式 ZCode 安装包，
   // 不向 Preview 渠道提供更新。构建期未启用自动更新时同样不更新
   // （见 docs/desktop/build-time-optional-capabilities.md）。
+  // Fen Jue 打包态独立启用：仅在 win32 且构建期注入了 manifest 源时打开
+  // （见 resolveFenJuePackagedManifestUrl 与 docs/desktop/fen-jue-product-identity.md）。
   void initAutoUpdater({
-    enabled: ZCODE_PRODUCT_FLAVOR === "production" && ZCODE_AUTO_UPDATE_ENABLED,
+    enabled:
+      (ZCODE_PRODUCT_FLAVOR === "production" && ZCODE_AUTO_UPDATE_ENABLED) ||
+      resolveFenJuePackagedManifestUrl() !== null,
     onBeforeQuitAndInstall: async () => {
       notifyStabilityLifecycle("update_install");
       await prepareAppQuit("auto-update quitAndInstall", "update-install");

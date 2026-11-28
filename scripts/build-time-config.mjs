@@ -44,6 +44,9 @@ export async function resolveBuildTimeConfig(
     autoUpdateEnabled: ENABLED_VALUES.has(
       pickValue(env, defaults, "ZCODE_AUTO_UPDATE").toLowerCase(),
     ),
+    // Fen Jue（二开版）打包态的 manifest 更新源完整 URL（latest.yml）。
+    // 与 ZCODE_UPDATE_FEED_URL 不同：这是编译期常量，打包态也生效；为空 = fenjue 更新器关闭。
+    fenjueUpdateManifestUrl: pickValue(env, defaults, "ZCODE_FENJUE_UPDATE_MANIFEST_URL"),
   };
 }
 
@@ -52,5 +55,6 @@ export function createBuildTimeConfigDefines(config) {
     __ZCODE_ARMS_RUM_ENDPOINT__: JSON.stringify(config.armsRumEndpoint),
     __ZCODE_TELEMETRY_REPORT_ENDPOINT__: JSON.stringify(config.telemetryReportEndpoint),
     __ZCODE_AUTO_UPDATE_ENABLED__: JSON.stringify(config.autoUpdateEnabled),
+    __ZCODE_FENJUE_UPDATE_MANIFEST_URL__: JSON.stringify(config.fenjueUpdateManifestUrl),
   };
 }
