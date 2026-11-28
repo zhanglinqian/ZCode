@@ -24,6 +24,7 @@ import {
   Keyboard,
   FileSearch,
   RefreshCw,
+  Repeat,
   User,
 } from "lucide-react";
 import { isSettingsSectionEnabled, type SettingsSectionId } from "@/lib/settingsNavigation.js";
@@ -78,6 +79,13 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     id: "modelProvider",
     icon: Package,
     titleId: "settings.modelProviderTitle",
+    groupId: "basics",
+  },
+  // 模型接力紧跟模型供应商：两者都配置「用哪些模型」，接力决定额度到阈值后按什么顺序换。
+  {
+    id: "modelRelay",
+    icon: Repeat,
+    titleId: "settings.modelRelay.title",
     groupId: "basics",
   },
   // 个性化（用户自定义指令）是 Agent 能力组的第一项：编辑 ~/.zcode/AGENTS.md，

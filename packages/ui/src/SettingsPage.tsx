@@ -109,6 +109,7 @@ import { PersonalizationSection } from "@/settings/PersonalizationSection.js";
 import { BrowserSettingsSection } from "@/settings/BrowserSettingsSection.js";
 import { ComputerUseSection } from "@/settings/ComputerUseSection.js";
 import { ShortcutSettingsSection } from "@/settings/ShortcutSettingsSection.js";
+import { ModelRelaySettingsSection } from "@/settings/model-relay/ModelRelaySettingsSection.js";
 import {
   SettingsSearch,
   SettingsSearchTargetContext,
@@ -2215,6 +2216,11 @@ export function SettingsPage({
                             />
                           ) : activeSection === "shortcuts" ? (
                             <ShortcutSettingsSection isDesktop={Boolean(isDesktop)} />
+                          ) : activeSection === "modelRelay" ? (
+                            <ServiceProvider services={localHostServices}>
+                              {/* 额度候选查询属于本机全局事实源；与模型供应商分区同一边界。 */}
+                              <ModelRelaySettingsSection />
+                            </ServiceProvider>
                           ) : activeSection === "modelProvider" ? (
                             <ServiceProvider services={localHostServices}>
                               {/* 模型配置属于本机全局事实源；激活远端 workspace 时也不能注入远端 Host。 */}
