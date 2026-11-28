@@ -141,36 +141,43 @@ open "$TARGET_APP"
 }
 
 /**
- * Ed25519 验签 + sha512 校验下载好的更新 zip。
- * 签名文件约定为 zip URL 加 `.sig` 后缀（对 zip 原始字节签名，与 sha512 无关）。
+ * Ed25519 验签 + sha512 校验下载好的更新文件（mac 是 zip，Windows 是 NSIS exe——
+ * 两平台同一签名约定：文件 URL 加 `.sig` 后缀，对文件原始字节纯消息签名）。
  * 失败抛错，由调用方走既有失败收敛（handleAutoUpdateFailure），绝不进入安装阶段。
  */
-export async function verifyDownloadedUpdateZip(zipPath: string, zipUrl: string): Promise<void> {
-  const zipBytes = await readFile(zipPath);
-  const digest = createHash("sha512").update(zipBytes).digest("hex");
-  logger.info(`[mac-self-update] downloaded update zip sha512=${digest} size=${zipBytes.length}`);
+export async function verifyDownloadedUpdateFile(
+  updateFilePath: string,
+  updateFileUrl: string,
+): Promise<void> {
+  const updateBytes = await readFile(updateFilePath);
+  const digest = createHash("sha512").update(updateBytes).digest("hex");
+  logger.info(
+    `[fenjue-update] downloaded update file sha512=${digest} size=${updateBytes.length}`,
+  );
 
-  const signatureUrl = `${zipUrl.replace(/\/+$/, "")}.sig`;
+  const signatureUrl = `${updateFileUrl.replace(/\/+$/, "")}.sig`;
   let response: Response;
   try {
     response = await fetch(signatureUrl, { cache: "no-store" });
   } catch (error) {
-    throw new Error(`mac self-update signature fetch failed: ${signatureUrl} (${String(error)})`);
+    throw new Error(
+      `fenjue update signature fetch failed: ${signatureUrl} (${String(error)})`,
+    );
   }
   if (!response.ok) {
-    throw new Error(`mac self-update signature fetch returned ${response.status}: ${signatureUrl}`);
+    throw new Error(`fenjue update signature fetch returned ${response.status}: ${signatureUrl}`);
   }
   const signatureBase64 = (await response.text()).trim();
   const signature = Buffer.from(signatureBase64, "base64");
 
   const publicKey = createPublicKey(FENJUE_UPDATE_SIGNING_PUBLIC_KEY);
   // Ed25519 是纯消息签名（无预摘要），算法参数必须传 null；sha512 仅另行作记录校验。
-  const signatureValid = cryptoVerify(null, zipBytes, { key: publicKey }, signature);
+  const signatureValid = cryptoVerify(null, updateBytes, { key: publicKey }, signature);
   if (!signatureValid) {
     // 篡改或签名密钥不匹配：拒绝安装。这是 HTTP 明文 manifest 之外的独立信任锚。
-    throw new Error("mac self-update signature verification failed; refusing to install");
+    throw new Error("fenjue update signature verification failed; refusing to install");
   }
-  logger.info("[mac-self-update] update zip signature verified (Ed25519)");
+  logger.info("[fenjue-update] update file signature verified (Ed25519)");
 }
 
 /**

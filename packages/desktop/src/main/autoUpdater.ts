@@ -1477,14 +1477,16 @@ function resolveDownloadedZipUrl(info: UpdateDownloadedInfoLike): string | null 
 function publishDownloadedUpdate(info: UpdateDownloadedInfoLike): void {
   const downloadedZipPath = getDownloadedUpdateFilePath();
   const downloadedZipUrl = resolveDownloadedZipUrl(info);
-  if (shouldUseMacSelfUpdateInstall() && downloadedZipPath && downloadedZipUrl) {
-    // mac 自研安装：先 Ed25519 验签，通过才进入 ready。失败走既有失败收敛。
+  if (ZCODE_PRODUCT_FLAVOR === "fenjue" && downloadedZipPath && downloadedZipUrl) {
+    // fenjue 打包态（win32 + darwin）下载完成后统一先 Ed25519 验签，通过才进入
+    // ready。Windows 跳过了 Authenticode（构建未签名必然自拒），manifest sha512 只
+    // 保证传输完整——Ed25519 是发布来源的唯一信任锚，验签失败绝不进入安装。
     // 验签异步进行；期间不置 ready，避免用户在未验证的包上点「重启以更新」。
     if (macVerifyInFlight) return;
     macVerifyInFlight = true;
     void import("./macSelfUpdate.js")
-      .then(({ verifyDownloadedUpdateZip }) =>
-        verifyDownloadedUpdateZip(downloadedZipPath, downloadedZipUrl),
+      .then(({ verifyDownloadedUpdateFile }) =>
+        verifyDownloadedUpdateFile(downloadedZipPath, downloadedZipUrl),
       )
       .then(() => {
         macVerifyInFlight = false;
@@ -1493,7 +1495,7 @@ function publishDownloadedUpdate(info: UpdateDownloadedInfoLike): void {
       })
       .catch((error: unknown) => {
         macVerifyInFlight = false;
-        handleAutoUpdateFailure(error, "mac self-update signature verification failed");
+        handleAutoUpdateFailure(error, "fenjue update signature verification failed");
       });
     return;
   }

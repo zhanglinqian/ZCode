@@ -104,7 +104,10 @@ $env:ZCODE_FENJUE_UPDATE_MANIFEST_URL = "http://47.93.185.158/current/windows-x6
 pnpm bundle:desktop -- win x64
 ```
 
-产物发布（从构建机推送，三件套：安装包 + `.blockmap` + `latest.yml`）：
+产物发布（从构建机推送，四件套：安装包 + `.blockmap` + **`.sig`（Ed25519 验签，
+客户端下载完成强制校验，无 sig 拒绝安装）** + `latest.yml`）。签名在 mac 签名机
+执行（私钥见 macOS 信任边界节），也可把私钥临时置于 Windows 构建机后用同款
+`node scripts/sign-fenjue-update.mjs` 签名——签完即删，不留存：
 
 ```bash
 VER=4.0.1; ARCH=windows-x64; BASE=http://47.93.185.158
