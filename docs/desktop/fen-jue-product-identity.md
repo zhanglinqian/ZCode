@@ -55,16 +55,32 @@ ZCODE_ENV=production ZCODE_FENJUE_IDENTITY=1 ZCODE_DESKTOP_DIST_DIR=dist-fenjue 
 
 `dist-fenjue` 独立保存 Fen Jue 产物，不覆盖原 `dist` 中的 ZCode 构建。
 
-## Fen Jue 自动更新（增量，win32）
+## Fen Jue 自动更新（增量，win32 + darwin 自研安装）
 
 Fen Jue 复用官方增量更新链路（`ManifestUpdateProvider` → blockmap 差分 → 显式 quit-and-install），
-由构建期 `ZCODE_FENJUE_UPDATE_MANIFEST_URL`（完整 `latest.yml` URL，见
+由构建期 `ZCODE_FENJUE_UPDATE_MANIFEST_URL`（完整清单 URL，见
 [构建期可选能力](build-time-optional-capabilities.md)）整体开关：
 
-- **仅 win32 打包态启用**（`resolveFenJuePackagedManifestUrl()`：fenjue + win32 + URL 非空）。
-  mac 端 Squirrel.Mac 对 adhoc→adhoc 更新的 staging 行为未验证，且 mac 本机构建即安装，保持关闭。
+- **win32 打包态**：URL 指向 `latest.yml`，走 electron-updater 原生 NSIS 安装。
+- **darwin 打包态（2026-11-28 新增）**：URL 指向 `latest-mac.yml`，下载层复用
+  `MacUpdater`（blockmap 差分原生支持），**安装层自研**（`macSelfUpdate.ts`）——
+  Squirrel.Mac 用 ShipIt 校验「更新包签名 == 已装应用签名」，ad-hoc 签名必然被拒
+  （`SQRLUpdaterErrorDomain code 2`；Apple TN2318 明确 ad-hoc 不可用于分发）。
+  自研安装 = Ed25519 验签 → `prepareAppQuit("update-install")` → detached 安装器脚本
+  （等旧进程退出 → 解压 zip → 旧 .app 移入 backup → 新 .app 移入原位 →
+  `codesign --force --deep --sign -` 重签 → `open` → 写 result.json）→ `app.exit(0)`。
+  重启后读 result.json，失败自动用 backup 还原。
 - **未注入 URL 时更新器整体关闭**：入口可见（flavor 非 preview），但 init fail-closed、点击无效果、状态恒 idle。
 - 强制更新 gate 仍仅 production，fenjue 不启用。
+
+### macOS 额外信任边界（Ed25519 发布签名）
+
+manifest 走 HTTP 无 TLS，sha512 只保证传输完整；mac 自更新会执行任意代码，
+故**发布物（mac zip）必须带 Ed25519 签名**（`zip.sig`，对 zip 原始字节纯消息签名），
+公钥编进 `macSelfUpdate.ts`，验签失败绝不进入安装。私钥在发布方
+`~/.workbuddy/secrets/fenjue-update-ed25519.md`（不入仓库/服务器；泄露 =
+可向所有 Fen Jue 客户端推送任意代码）。签名工具
+`packages/desktop/scripts/sign-fenjue-update.mjs <更新zip>`。
 
 ### 信任边界（明确的取舍）
 
@@ -95,11 +111,36 @@ VER=4.0.1; ARCH=windows-x64; BASE=http://47.93.185.158
 ssh aliyun-hz "mkdir -p /var/www/fenjue-releases/$VER/$ARCH /var/www/fenjue-releases/current/$ARCH"
 scp "packages/desktop/dist/Fen Jue-$VER-win-x64.exe"* aliyun-hz:/var/www/fenjue-releases/$VER/$ARCH/
 # 关键：latest.yml 内的相对 url 必须改写为绝对 URL——provider 以 manifest URL 的根为 base
-# 解析相对路径，不改写会落到错误目录；blockmap URL 由 electron-updater 从安装包 URL 推导。
-sed -E "s#^(path:[[:space:]]*|- url:[[:space:]]*)#\\1$BASE/$VER/$ARCH/#" \
+# 解析相对路径，不改写会落到错误目录；注意 files: 列表行有前导空格，正则必须带 ^[[:space:]]*。
+# blockmap URL 由 electron-updater 从安装包 URL 推导。
+sed -E "s#^([[:space:]]*- url:[[:space:]]*|path:[[:space:]]*)#\\1$BASE/$VER/$ARCH/#" \
   "packages/desktop/dist/latest.yml" > "/tmp/latest-$VER.yml"
 scp "/tmp/latest-$VER.yml" aliyun-hz:/var/www/fenjue-releases/current/$ARCH/latest.yml
 ```
+
+macOS 侧构建（Darwin 自研安装）：
+
+```sh
+ZCODE_ENV=production ZCODE_FENJUE_IDENTITY=1 ZCODE_DESKTOP_DIST_DIR=dist-fenjue \
+  ZCODE_FENJUE_UPDATE_MANIFEST_URL=http://47.93.185.158/current/macos-arm64/latest-mac.yml \
+  pnpm bundle:desktop
+```
+
+macOS 产物发布（四件套：zip + `.blockmap` + `.sig` + `latest-mac.yml`）：
+
+```bash
+VER=4.0.1; BASE=http://47.93.185.158
+cd packages/desktop/dist-fenjue
+node ../../scripts/sign-fenjue-update.mjs "Fen Jue-$VER-mac-arm64.zip"   # 产 .sig
+ssh aliyun-hz "mkdir -p /var/www/fenjue-releases/$VER/macos-arm64 /var/www/fenjue-releases/current/macos-arm64"
+scp "Fen Jue-$VER-mac-arm64.zip"{,.blockmap,.sig} aliyun-hz:/var/www/fenjue-releases/$VER/macos-arm64/
+sed -E "s#^([[:space:]]*- url:[[:space:]]*|path:[[:space:]]*)#\\1$BASE/$VER/macos-arm64/#" \
+  latest-mac.yml > "/tmp/latest-mac-$VER.yml"
+scp "/tmp/latest-mac-$VER.yml" aliyun-hz:/var/www/fenjue-releases/current/macos-arm64/latest-mac.yml
+```
+
+注意：**历史版本目录与 blockmap 永不删除**——差分下载要把新文件 URL 里的版本号
+替换成旧版本号去拉旧 blockmap（`Provider.getBlockMapFiles`），删了就静默回退整包。
 
 ### 更新验收
 

@@ -2693,3 +2693,8 @@ exceptions:
     paths:
       - packages/ui/src/lib/desktopUpdateMenu.ts
     reason: Fen Jue 增量更新改造（docs/desktop/fen-jue-product-identity.md「Fen Jue 自动更新」节）——上游已有的更新入口集中判定把 flavor === "production" 放宽为 !== "preview"，使 fenjue 入口随 win32 打包态构建期 manifest 源开关联动；仅改一行布尔与注释，不新增状态 owner 或模块边界，本次不接管整个 ui 未受管模块。
+  - id: fenjue-mac-self-update-new-file
+    rule: unmanaged-new-file
+    paths:
+      - packages/desktop/src/main/macSelfUpdate.ts
+    reason: Fen Jue macOS 自研增量更新的安装层（docs/desktop/fen-jue-product-identity.md「Fen Jue 自动更新」节）——Squirrel.Mac 拒绝 ad-hoc 更新包，自研安装由 Ed25519 验签 + 独立脚本替换 .app 并重签组成；下载/差分层完全复用受管的 autoUpdater（ManifestUpdateProvider + MacUpdater），新文件只承载验签、安装器脚本生成与失败还原，不新增协议或状态 owner；接管整个 desktop 未受管模块不在本次范围内。

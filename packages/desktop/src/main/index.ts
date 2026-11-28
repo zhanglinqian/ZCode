@@ -126,6 +126,11 @@ import {
   syncPostUpdateReleaseNotesToWindow,
   syncReadyUpdateToWindow,
 } from "./autoUpdater.js";
+import {
+  consumeLastInstallResult,
+  restoreFailedUpdate,
+  stageInstallerAndRelaunch,
+} from "./macSelfUpdate.js";
 import { BroadcastHub } from "./broadcastHub.js";
 import { TaskRealtimeBus } from "./taskRealtimeBus.js";
 import { createAppLaunchGate } from "./appLaunchGate.js";
@@ -2655,18 +2660,50 @@ app.whenReady().then(async () => {
   }
 
   await hydratePendingPostUpdateReleaseNotes(mainSettingService);
+  if (ZCODE_PRODUCT_FLAVOR === "fenjue" && process.platform === "darwin" && app.isPackaged) {
+    // mac 自研更新的启动期自检：上次更新失败时还原 backup（替换是先备份后覆盖，
+    // 还原 = 把 backup 移回原位再重签），避免坏包把应用留死。
+    void restoreFailedUpdate().catch((error) => {
+      logger.warn("[mac-self-update] startup restore check failed:", error);
+    });
+    void consumeLastInstallResult()
+      .then((last) => {
+        if (last?.status === "success") {
+          logger.info(`[mac-self-update] previous self-update to ${last.version} verified`);
+        }
+      })
+      .catch(() => {});
+  }
   logWindowsBundledRuntimeIntegrityDiagnostic();
 
   // 启动自动更新检查（后台执行，不阻塞主界面）
   // Preview 身份无论连接哪个后端都不自动更新：stable feed 上只分发正式 ZCode 安装包，
   // 不向 Preview 渠道提供更新。构建期未启用自动更新时同样不更新
   // （见 docs/desktop/build-time-optional-capabilities.md）。
-  // Fen Jue 打包态独立启用：仅在 win32 且构建期注入了 manifest 源时打开
+  // Fen Jue 打包态独立启用：仅在 win32/darwin 且构建期注入了 manifest 源时打开
   // （见 resolveFenJuePackagedManifestUrl 与 docs/desktop/fen-jue-product-identity.md）。
+  // darwin 走自研安装：Squirrel.Mac 拒绝 ad-hoc 更新包，由 macSelfUpdate 在退出后
+  // 用独立脚本替换 .app 并 ad-hoc 重签（无 Developer ID 时的零成本方案）。
   void initAutoUpdater({
     enabled:
       (ZCODE_PRODUCT_FLAVOR === "production" && ZCODE_AUTO_UPDATE_ENABLED) ||
       resolveFenJuePackagedManifestUrl() !== null,
+    customQuitAndInstall: async (downloadedZipPath, downloadedZipUrl) => {
+      const installState = getAutoUpdaterState();
+      const newVersion =
+        installState.kind === "update-downloaded" || installState.kind === "update-available"
+          ? installState.version
+          : "unknown";
+      await stageInstallerAndRelaunch({
+        zipPath: downloadedZipPath,
+        newVersion,
+      });
+      logger.info(
+        `[mac-self-update] installer staged (zip=${downloadedZipPath} url=${downloadedZipUrl} version=${newVersion}); exiting for replacement`,
+      );
+      // 安装器已脱离进程树；此时退出准备已完成，直接退出交给脚本接管。
+      app.exit(0);
+    },
     onBeforeQuitAndInstall: async () => {
       notifyStabilityLifecycle("update_install");
       await prepareAppQuit("auto-update quitAndInstall", "update-install");

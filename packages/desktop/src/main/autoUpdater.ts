@@ -104,17 +104,35 @@ type UpdateDownloadedInfoLike = {
 type RuntimeUpdateFeedSource = { url: string };
 
 /**
- * Fen Jue（二开版）打包态的 manifest 更新源：构建期注入的完整 latest.yml URL。
+ * Fen Jue（二开版）打包态的 manifest 更新源：构建期注入的完整清单 URL
+ * （win32 是 latest.yml，darwin 是 latest-mac.yml，由各构建机注入各自的路径）。
  *
- * 只有 win32 打包态启用（mac 端 Squirrel.Mac 对 adhoc→adhoc 更新的 staging 行为
- * 未验证，且 mac 本机构建即安装，更新器价值低）。返回 null 表示 fenjue 更新器
- * 整体关闭——init enabled 与入口可见性都以它为准，避免"有入口没有源"。
+ * 返回 null 表示 fenjue 更新器整体关闭——init enabled 与入口可见性都以它为准，
+ * 避免"有入口没有源"。win32 走 electron-updater 原生 NSIS 安装；darwin 走
+ * macSelfUpdate 自研安装（Squirrel.Mac 拒绝 ad-hoc 签名，见该模块注释）。
  */
 export function resolveFenJuePackagedManifestUrl(): string | null {
   if (ZCODE_PRODUCT_FLAVOR !== "fenjue") return null;
-  if (process.platform !== "win32") return null;
+  if (process.platform !== "win32" && process.platform !== "darwin") return null;
   const manifestUrl = ZCODE_FENJUE_UPDATE_MANIFEST_URL.trim();
   return manifestUrl !== "" ? manifestUrl : null;
+}
+
+/** fenjue + darwin：安装层不走 Squirrel.Mac，交给 macSelfUpdate 自研安装。 */
+function shouldUseMacSelfUpdateInstall(): boolean {
+  return ZCODE_PRODUCT_FLAVOR === "fenjue" && process.platform === "darwin";
+}
+
+/**
+ * electron-updater 已下载（含差分）的更新文件路径；fenjue 安装分流需要它把 zip
+ * 交给自研安装器。无已下载更新时返回 null。
+ */
+export function getDownloadedUpdateFilePath(): string | null {
+  const helper = (
+    autoUpdater as unknown as { downloadedUpdateHelper?: { file?: string } | null }
+  ).downloadedUpdateHelper;
+  const zipPath = helper?.file;
+  return typeof zipPath === "string" && zipPath !== "" ? zipPath : null;
 }
 
 /**
@@ -145,6 +163,12 @@ let forceAutoUpdateLastLoggedProgressBucket: number | null = null;
 interface InitAutoUpdaterOptions {
   enabled?: boolean;
   onBeforeQuitAndInstall?: () => void | Promise<void>;
+  /**
+   * fenjue + darwin 的自研安装入口（macSelfUpdate）：替代 Squirrel.Mac。
+   * 收到已下载（含差分）的 zip 路径与其 manifest URL；调用时退出准备已完成，
+   * 实现方应 stage 安装器并尽快返回，由调用方 relaunch/exit。
+   */
+  customQuitAndInstall?: (downloadedZipPath: string, downloadedZipUrl: string) => void | Promise<void>;
   settingService?: SettingServiceLike;
   locale?: Locale;
   updateFeedSource?: RuntimeUpdateFeedSource;
@@ -650,6 +674,22 @@ async function quitAndInstallUpdate(rejectUnavailable = false, showLinuxAuthoriz
       logger.info("[auto-update] dev update install fallback: relaunch app");
       app.relaunch();
       app.exit(0);
+      return;
+    }
+
+    if (shouldUseMacSelfUpdateInstall()) {
+      // fenjue + darwin：Squirrel.Mac 拒绝 ad-hoc 签名更新包（SQRLUpdaterErrorDomain
+      // code 2），改走自研安装器——stage 完成后由调用方（index.ts 的 wrapper）退出进程，
+      // 独立脚本完成替换、重签与 relaunch。
+      const downloadedZipPath = getDownloadedUpdateFilePath();
+      if (!downloadedZipPath || !readyUpdateZipUrl) {
+        throw new Error("mac self-update download context is missing (zip path/url)");
+      }
+      logger.info(
+        `[mac-self-update] delegating install to custom installer zip=${downloadedZipPath}`,
+      );
+      await customQuitAndInstallHandler?.(downloadedZipPath, readyUpdateZipUrl);
+      // 安装器已 detached 启动；调用方在 customQuitAndInstall 返回后退出进程。
       return;
     }
 
@@ -1417,7 +1457,50 @@ async function clearSkippedUpdateVersionForManualCheck(
   }
 }
 
+let customQuitAndInstallHandler:
+  | ((downloadedZipPath: string, downloadedZipUrl: string) => void | Promise<void>)
+  | undefined;
+let readyUpdateZipUrl: string | null = null;
+let macVerifyInFlight = false;
+
+/** 从下载结果里取 mac 更新 zip 的 manifest URL（验签文件 `.sig` 由它推导）。 */
+function resolveDownloadedZipUrl(info: UpdateDownloadedInfoLike): string | null {
+  for (const file of info.files ?? []) {
+    const url = file?.url;
+    if (typeof url === "string" && url.toLowerCase().endsWith(".zip")) {
+      return url;
+    }
+  }
+  return null;
+}
+
 function publishDownloadedUpdate(info: UpdateDownloadedInfoLike): void {
+  const downloadedZipPath = getDownloadedUpdateFilePath();
+  const downloadedZipUrl = resolveDownloadedZipUrl(info);
+  if (shouldUseMacSelfUpdateInstall() && downloadedZipPath && downloadedZipUrl) {
+    // mac 自研安装：先 Ed25519 验签，通过才进入 ready。失败走既有失败收敛。
+    // 验签异步进行；期间不置 ready，避免用户在未验证的包上点「重启以更新」。
+    if (macVerifyInFlight) return;
+    macVerifyInFlight = true;
+    void import("./macSelfUpdate.js")
+      .then(({ verifyDownloadedUpdateZip }) =>
+        verifyDownloadedUpdateZip(downloadedZipPath, downloadedZipUrl),
+      )
+      .then(() => {
+        macVerifyInFlight = false;
+        readyUpdateZipUrl = downloadedZipUrl;
+        finishPublishDownloadedUpdate(info);
+      })
+      .catch((error: unknown) => {
+        macVerifyInFlight = false;
+        handleAutoUpdateFailure(error, "mac self-update signature verification failed");
+      });
+    return;
+  }
+  finishPublishDownloadedUpdate(info);
+}
+
+function finishPublishDownloadedUpdate(info: UpdateDownloadedInfoLike): void {
   readyUpdateVersion = info.version;
   readyUpdateRestoredFromPendingReleaseNotes = false;
   readyUpdateChannel = downloadingUpdateChannel ?? availableUpdateChannel;
@@ -1768,6 +1851,7 @@ export async function initAutoUpdater(options: InitAutoUpdaterOptions = {}): Pro
   if (!canUseAutoUpdaterInCurrentRuntime()) return;
 
   onBeforeQuitAndInstall = options.onBeforeQuitAndInstall;
+  customQuitAndInstallHandler = options.customQuitAndInstall;
   if (options.locale) {
     menuLocale = options.locale;
   }
