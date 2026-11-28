@@ -17,6 +17,7 @@ import {
   embeddedBrowserViewportPreferenceSchema,
 } from "./browser-use/command-metadata.js";
 import { providerFamilyConnectionSelectionSettingsSchema } from "./provider-family-connection-selection.js";
+import { modelRelayChainSchema } from "./model-relay.js";
 import {
   connectionProfileSchema,
   sourceServerRecordSchema,
@@ -535,6 +536,8 @@ const appSettingsObjectSchema = z.object({
   locale: localeSchema.default("zh-CN"),
   // 快捷键用户覆盖（语义校验在 ui/src/shortcuts 生效表阶段容错，schema 只管形状）
   shortcutBindings: z.record(z.string(), z.array(z.string())).optional(),
+  // 模型接力链路（docs/fen-jue/model-relay.md）；重复模型等语义校验在 schema 的 superRefine 内。
+  modelRelayChain: modelRelayChainSchema.optional(),
   localePreference: localePreferenceSchema.default("system"),
   terminalInheritSystemProfile: z.boolean().default(true),
   terminalFontFamily: nonEmptyStringSchema.optional(),
@@ -647,6 +650,7 @@ export const appSettingsPatchSchema = z.object({
   recentProjects: z.array(z.string()).optional(),
   locale: localeSchema.optional(),
   shortcutBindings: z.record(z.string(), z.array(z.string())).optional(),
+  modelRelayChain: modelRelayChainSchema.optional(),
   localePreference: localePreferenceSchema.optional(),
   terminalInheritSystemProfile: z.boolean().optional(),
   terminalFontFamily: nonEmptyStringSchema.optional(),

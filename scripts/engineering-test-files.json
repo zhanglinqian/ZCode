@@ -182,5 +182,6 @@
   "packages/desktop/test/stdioTapCredentialRedaction.test.ts",
   "scripts/preinstalled-tools/catalog.test.ts",
   "scripts/test/audit-conversation-session-json-out.test.mjs",
-  "packages/shared/test/dataRootPaths.test.ts"
+  "packages/shared/test/dataRootPaths.test.ts",
+  "packages/shared/test/modelRelay.test.ts"
 ]

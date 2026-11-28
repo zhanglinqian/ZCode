@@ -2,6 +2,7 @@ import type { RemoteAssetInstallMode } from "./remoteAssetInstallMode.js";
 import type { RemoteResourcePackageSelection } from "./remoteResourcePackages.js";
 import type { ProviderFamilyDomain } from "./model-provider-family.js";
 import type { ProviderFamilyConnectionSelectionSettings } from "./provider-family-connection-selection.js";
+import type { ModelRelayChain } from "./model-relay.js";
 import type { ZCodeProvider } from "./zcode-task-types-core.js";
 import type { WorkspacePurpose } from "./workspacePurpose.js";
 import type { DynamicWorkflowMode } from "./dynamic-workflow-feature.js";
@@ -271,6 +272,11 @@ export interface AppSettings {
    * 覆盖语义为整组替换（如 openCommandCenter 的双默认绑定被覆盖时同时失效）。
    */
   shortcutBindings?: Record<string, string[]>;
+  /**
+   * 模型接力链路（docs/fen-jue/model-relay.md）：卡片顺序即切换顺序，环形接力。
+   * 结构校验见 model-relay.ts 的 schema；少于 2 张时功能不生效。
+   */
+  modelRelayChain?: ModelRelayChain;
   /** 界面语言偏好；locale 保存偏好解析后的实际语言，供 main/menu/远控等非浏览器上下文使用。 */
   localePreference?: LocalePreference;
   /** 是否尽量继承系统终端 profile、shell 环境和字体 */

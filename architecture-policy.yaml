@@ -2675,3 +2675,16 @@ exceptions:
     paths:
       - apps/zcode-cli/packages/bootstrap/src/app/model-catalog-port.ts
     reason: Fen Jue 行为差异 D1（docs/fen-jue/behavior-deltas.md）——已准入的工具层模型目录只把默认档位从「取最后一项」改为调用 @zcode/provider 的 resolveDefaultReasoningLevel（最低开启档），与 CLI 模型列表及 Host 的 completeNewModelSelection 共用同一条规则；只改一行取值与注释，不新增状态 owner 或模块边界，本次不接管整个 zcode-cli 未受管模块。
+  - id: fenjue-model-relay-new-file
+    rule: unmanaged-new-file
+    paths:
+      - packages/shared/src/model-relay.ts
+    reason: 模型接力（docs/fen-jue/model-relay.md）的纯领域层：链路结构校验、5 小时额度桶识别（GLM TIME_LIMIT 与 MiniMax TOKENS_LIMIT unit=3/number=5）、接力目标环形决策、额度耗尽业务码清单（与 CLI adapters 的 WORKFLOW_QUOTA_PROVIDER_CODES 同源，有守护用例）。零 IO 零依赖产品身份，与 dataRootPaths.ts 同一登记模式；接管整个 shared 未受管模块不在本次范围内。
+  - id: fenjue-model-relay-settings-new-files
+    rule: unmanaged-new-file
+    paths:
+      - packages/ui/src/settings/model-relay/GradientSlider.tsx
+      - packages/ui/src/settings/model-relay/ModelRelayCard.tsx
+      - packages/ui/src/settings/model-relay/ModelRelaySettingsSection.tsx
+      - packages/ui/src/settings/model-relay/useModelRelayCandidates.ts
+    reason: 模型接力设置页（docs/fen-jue/model-relay.md 检查点 R3）：卡片列表（@dnd-kit/sortable 拖拽排序）、阈值滑动条（复用 composer-thought-slider.css 的视觉类，不改动 ComposerModelMenu）、添加模型对话框（候选按 5 小时额度过滤，复用 getEntitlementSnapshot 单入口）。只读写 settings.modelRelayChain，不做额度判定与切换执行；沿用 minimax/deepseek 供应商自带数据组件的登记模式，接管整个 ui 未受管模块不在本次范围内。
