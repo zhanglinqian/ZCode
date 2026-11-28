@@ -294,8 +294,8 @@ function printHelp() {
 参数:
   --os, -o <mac|win|linux>     目标操作系统，默认 mac
   --arch, -a <x64|arm64>       目标 CPU 架构，默认 arm64
-  --skip-prepare               跳过 prepare:runtime-assets
-  --skip-build                 跳过 pnpm build
+  --skip-prepare               跳过 prepare:runtime-assets（资产准备只执行一次，不重复）
+  --skip-build                 跳过产物编译（build:no-runtime-assets）
   --dry-run                    只打印最终命令，不执行打包
   -h, --help                   查看帮助
 
@@ -772,7 +772,12 @@ async function main() {
   }
 
   if (!skipBuild) {
-    run(pnpmCommand, ["build"], buildEnv);
+    // desktop 包的 "build" 脚本 = prepare:runtime-assets + build:no-runtime-assets。
+    // 上面已经单独跑过 prepare:runtime-assets，再调 "build" 会把整个资产准备
+    // （含 agent bundle 全量重建，Windows 上实测 176-216s）重跑一遍。
+    // 这里只调 build:no-runtime-assets：产物与之前一致，但准备阶段只执行一次。
+    // 副作用是 --skip-prepare 现在真正生效——之前它会被 "build" 里的 prepare 抵消。
+    run(pnpmCommand, ["build:no-runtime-assets"], buildEnv);
   }
 
   await runTimedAsync("bundle:electron-builder", () =>

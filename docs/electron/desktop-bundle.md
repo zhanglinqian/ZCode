@@ -44,6 +44,33 @@ GC 后 heapUsed 和 RSS；用户截图的 Strings 分类不能直接等同于源
 pnpm bundle:desktop
 ```
 
+## 阶段耗时与提速约束
+
+`bundle.mjs` 的阶段顺序是：资源准备（`prepare:runtime-assets`）→ 产物编译
+（`build:no-runtime-assets`）→ `electron-builder` 出包。资源准备**只执行一次**：
+desktop 包的 `build` 脚本等于 `prepare:runtime-assets + build:no-runtime-assets`，
+bundle 入口已经单独跑过 prepare，若再调 `build` 会把资产准备整体重跑一遍
+（Windows 实测 agent bundle 全量重建 176-216s，重复即浪费 3-4 分钟）。
+bundle 因此只调 `build:no-runtime-assets`；`--skip-prepare` 也因此真正生效
+（此前它会被 `build` 内含的 prepare 抵消）。
+
+2026-11-28 ROG-9（Windows x64）实测分段耗时：
+
+| 阶段                      | 耗时     | 说明                                              |
+| ------------------------- | -------- | ------------------------------------------------- |
+| `prepare:runtime-assets`  | ~205s    | 其中 agent bundle 全量重建 176.5s 占绝对大头      |
+| `build:no-runtime-assets` | ~90s     | tsup（main/host/preload 等）+ vite renderer       |
+| `electron-builder`        | 215-439s | 含 asar 打包、依赖注入、afterPack 清理、NSIS 压缩 |
+
+已知 Windows 专属慢点与后续提速方向（未实施）：
+
+- afterPack 的 sourcemap 清理需要把整个 `app.asar`（约 385MB）解包再重打，
+  Windows 实测解包单步 162s，是 `electron-builder` 阶段的主要开销；
+- agent bundle 每次全量重建 CLI 18 个子包与 10 个插件包（`tsc`），
+  `apps/zcode-cli/turbo.json` 已开 `cache: true`，切 turbo 构建可命中缓存；
+- Windows 上大量小文件写入受 Defender 实时扫描影响，构建机排除构建目录与
+  临时目录可显著降低解包/打包耗时。
+
 ## 显式指定目标平台
 
 命名参数：
